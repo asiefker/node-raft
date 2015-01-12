@@ -1,8 +1,11 @@
-var querystring = require('querystring');
-var url = require('url');
 var async = require('async');
 var http = require('http');
 var log4js = require('log4js');
+var needle = require('needle');
+var promise = require('promise');
+var querystring = require('querystring');
+var url = require('url');
+
 var logger = log4js.getLogger();
 
 logger.info("Args " + process.argv);
@@ -16,8 +19,6 @@ logger.info("Others: " + others);
 
 http.createServer(function (req, res) {
     q = url.parse(req.url, true);
-    logger.info(req.method);
-    logger.info(q);
     if (req.method == "POST") {
         var body = "";
         req.on('data', function(chunk){body += chunk.toString();});
@@ -26,7 +27,7 @@ http.createServer(function (req, res) {
             var decoded = querystring.parse(body);
             logger.info("body: " + decoded);
             if (q.path == "/vote") {
-                logger.info("dispatching to handleVote");
+                logger.info("dispatching to handleVote: " + body);
                 res.writeHead(200, {'Content-Type': 'application/json'});
                 res.write(JSON.stringify(handleVoteRequest(JSON.parse(body))));
             }
@@ -51,11 +52,12 @@ var votedFor = "";
 
 var electionTimeout = setTimeout(function(){
     logger.info("Election Timeout");
-    state = "candidate";
-},4000 + Math.floor(Math.random(2000)));
-logger.info(JSON.parse("{\"key\": 1}"));
+    requestVote();
+},6000 + Math.floor(Math.random() * 2000));
 
 function handleVoteRequest(voteReq) {
+    logger.info("VoteRequest term: " + voteReq.term);
+    logger.info("State: currentTerm " + currentTerm + " votedFor: " + votedFor +" currentLogIndex: " + currentLogIndex );
     if (voteReq.term < currentTerm) {
         return {"term": currentTerm, "voteGranted": false};
     } 
@@ -77,5 +79,49 @@ function logIsUpToDate(lastLogTerm, lastLogIndex) {
 }
 
 function requestVote() {
+    logger.info("Requesting vote");
+    state = "candidate";
+    currentTerm += 1;
+    votedFor = id;
+    voteReq = {"term": currentTerm, "candidateId": id, "lastLogIndex": currentLogIndex, "lastLogTerm":currentTerm};
+    var grantedCount = 0;
+  
     
+    async.each(others, function(port, callback){
+        var endpoint = "http://localhost:"+port+"/vote";
+        needle.post(endpoint, voteReq, {'json': 'true', 'timeout': 200}, function(err, resp){
+            if (err) {
+                logger.warn(endpoint + "failed to respond: " + err);
+            } else if (resp.body.voteGranted) {
+                grantedCount +=1;
+            }
+            callback();
+        });
+
+    }, function(){logger.info("Complete: " + grantedCount);});
+}
+
+function sendAll(jsonBody, eachCB, finalCB) {
+    async.each(others, function(port, callback){
+        var endpoint = "http://localhost:"+port+"/vote";
+        needle.post(endpoint, jsonBody, {'json': 'true', 'timeout': 200}, function(err, resp){
+            if (err) {
+                logger.warn(endpoint + "failed to respond: " + err);
+            } else {
+                eachCB(resp.body);
+            }
+            callback();
+        });
+});}
+
+var heartbeatTimer;
+function becomeLeader() {
+    state = "leader";
+    heartbeatTimer = setInterval(sendAppendEntry,
+        6000 + Math.floor(Math.random() * 2000));
+}
+
+function sendAppendEntry() {
+    append = {"term": currentTerm, "leaderId": id, "prevLogIndex":0, "prevLogTerm":9, "entries":[], "leaderCommitIndex":0};
+
 }
