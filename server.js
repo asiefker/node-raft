@@ -91,17 +91,26 @@ function requestVote() {
     state = "candidate";
     currentTerm += 1;
     votedFor = id;
-    voteReq = {"term": currentTerm, "candidateId": id, "lastLogIndex": currentLogIndex, "lastLogTerm":currentTerm};
+    voteReq = {"term": currentTerm, "candidateId": id, 
+            "lastLogIndex": currentLogIndex, "lastLogTerm":currentTerm};
     var grantedCount = 0;
     sendAll("/vote", voteReq, function(vReq) {
         if (vReq.voteGranted) {
             grantedCount +=1;
+        } else {
+            // set currentTerm to max seen
+            currentTerm = Math.max(currentTerm, vReq.term);
         }
     }, function(){
         logger.info("Complete: " + grantedCount);
-        if (grantedCount > 0) {
+        if (grantedCount > others.length/2) {
             logger.info("Become leader");
             becomeLeader();
+        }
+        else {
+            logger.info("Not elected. Schedule another election");
+            votedFor = "";
+            electionTimeout = newElectionTimeout();    
         }
     }); 
 }
