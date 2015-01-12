@@ -16,6 +16,9 @@ for (var i=process.argv[3]; i<=process.argv[4]; i++) {
     others.push(i);
 }
 logger.info("Others: " + others);
+paths = {"/vote": handleVoteRequest,
+         "/append": handleAppendRequest
+        };
 
 http.createServer(function (req, res) {
     q = url.parse(req.url, true);
@@ -24,12 +27,12 @@ http.createServer(function (req, res) {
         req.on('data', function(chunk){body += chunk.toString();});
         req.on('end', function(){
             res.writeHead(200, "OK", {'Content-Type': 'application/json'});
+            logger.info("body: " + body);
             var decoded = querystring.parse(body);
-            logger.info("body: " + decoded);
-            if (q.path == "/vote") {
-                logger.info("dispatching to handleVote: " + body);
+            if (paths[q.path] !== undefined) {
+                logger.info("dispatching to handler: " + body);
                 res.writeHead(200, {'Content-Type': 'application/json'});
-                res.write(JSON.stringify(handleVoteRequest(JSON.parse(body))));
+                res.write(JSON.stringify(paths[q.path](JSON.parse(body))));
             }
             else {
                 res.writeHead(400, {'Content-Type': 'application/json'});
@@ -50,10 +53,15 @@ var currentTerm = 0;
 var currentLogIndex=0;
 var votedFor = "";
 
-var electionTimeout = setTimeout(function(){
-    logger.info("Election Timeout");
-    requestVote();
-},6000 + Math.floor(Math.random() * 2000));
+var electionTimeout = newElectionTimeout();
+
+function newElectionTimeout() {
+    return setTimeout(function(){
+        logger.info("Election Timeout");
+        requestVote();
+    },
+    6000 + Math.floor(Math.random() * 2000));
+}
 
 function handleVoteRequest(voteReq) {
     logger.info("VoteRequest term: " + voteReq.term);
@@ -85,25 +93,27 @@ function requestVote() {
     votedFor = id;
     voteReq = {"term": currentTerm, "candidateId": id, "lastLogIndex": currentLogIndex, "lastLogTerm":currentTerm};
     var grantedCount = 0;
-  
-    
-    async.each(others, function(port, callback){
-        var endpoint = "http://localhost:"+port+"/vote";
-        needle.post(endpoint, voteReq, {'json': 'true', 'timeout': 200}, function(err, resp){
-            if (err) {
-                logger.warn(endpoint + "failed to respond: " + err);
-            } else if (resp.body.voteGranted) {
-                grantedCount +=1;
-            }
-            callback();
-        });
-
-    }, function(){logger.info("Complete: " + grantedCount);});
+    sendAll("/vote", voteReq, function(vReq) {
+        if (vReq.voteGranted) {
+            grantedCount +=1;
+        }
+    }, function(){
+        logger.info("Complete: " + grantedCount);
+        if (grantedCount > 0) {
+            logger.info("Become leader");
+            becomeLeader();
+        }
+    }); 
 }
 
-function sendAll(jsonBody, eachCB, finalCB) {
+/**
+ * Post jsonBody to all the other servers. 
+ * eachCB is called to handle each response. 
+ * finalCB is called when all responses are received. 
+ */
+function sendAll(path, jsonBody, eachCB, finalCB) {
     async.each(others, function(port, callback){
-        var endpoint = "http://localhost:"+port+"/vote";
+        var endpoint = "http://localhost:"+port+path;
         needle.post(endpoint, jsonBody, {'json': 'true', 'timeout': 200}, function(err, resp){
             if (err) {
                 logger.warn(endpoint + "failed to respond: " + err);
@@ -112,16 +122,25 @@ function sendAll(jsonBody, eachCB, finalCB) {
             }
             callback();
         });
-});}
+    }, finalCB);
+}
 
 var heartbeatTimer;
 function becomeLeader() {
     state = "leader";
     heartbeatTimer = setInterval(sendAppendEntry,
-        6000 + Math.floor(Math.random() * 2000));
+        1000 + Math.floor(Math.random() * 500));
 }
 
 function sendAppendEntry() {
     append = {"term": currentTerm, "leaderId": id, "prevLogIndex":0, "prevLogTerm":9, "entries":[], "leaderCommitIndex":0};
+    sendAll("/append", append, function(a){}, function(){});
+}
 
+function handleAppendRequest(appendReq) {
+    logger.info("Clearing timeout");
+    clearTimeout(electionTimeout);
+    electionTimeout = newElectionTimeout(); 
+    return {"currentTerm": currentTerm, "success": true};
+    // TODO: Implement the rest 
 }
