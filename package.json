@@ -9,9 +9,11 @@
     "needle": "^0.7",
     "promise": "^6.0.1"
   },
-  "devDependencies": {},
+  "devDependencies": {
+    "nodeunit" : "^0.9"
+  },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "scripts/test"
   },
   "author": "Adam Siefker",
   "license": "ISC"
