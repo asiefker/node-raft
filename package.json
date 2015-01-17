@@ -10,10 +10,11 @@
     "promise": "^6.0.1"
   },
   "devDependencies": {
-    "nodeunit" : "^0.9"
+    "nodeunit" : "^0.9",
+    "mocha" : "^2.1.0"
   },
   "scripts": {
-    "test": "scripts/test"
+    "test": "scripts/test.sh"
   },
   "author": "Adam Siefker",
   "license": "ISC"
