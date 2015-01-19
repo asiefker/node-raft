@@ -29,7 +29,7 @@ exports.Raft = function (id, others, send) {
 };
 
 function logIsUpToDate(r, term, lastLogIndex) {
-    assert.ok(term > 0); 
+    assert.ok(term > 0);
     if (term == r.currentTerm) {
         return lastLogIndex >= r.currentLogIndex;
     }
@@ -52,6 +52,7 @@ function startElection(r) {
         } else {
             // set currentTerm to max seen
             // todo this state needs to kill the current election
+            // to enable, pass the req back in
             r.currentTerm = Math.max(r.currentTerm, vRes.term);
         }
     }, function(){
@@ -63,7 +64,7 @@ function startElection(r) {
         else {
             logger.info("Not elected. Schedule another election");
             r.votedFor = "";
-            r.electionTimeout = newElectionTimeout();    
+            r.electionTimeout = newElectionTimeout(r);    
         }
     }); 
 }
@@ -79,7 +80,7 @@ function newElectionTimeout(r) {
         logger.info("Election Timeout");
         startElection(r); 
     },
-    1000 + Math.floor(Math.random() * 2000), this);
+    1000 + Math.floor(Math.random() * 2000));
 }
     
 // todo imple

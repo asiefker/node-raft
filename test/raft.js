@@ -1,7 +1,6 @@
 var assert = require("assert");
 var raft = require("../raft");
-console.log(Object.keys(assert));
-console.log(assert);
+
 describe('Raft.State', function() {
     describe('#logIsUpToDate', function(){
         beforeEach(function(){
@@ -26,9 +25,10 @@ describe('Raft.State', function() {
         });
 
         it('Reply true if terms == currentTerm and lastLogIndex > currentLogIndex', function() {
-            r.term = 1;
+            r.currentTerm = 1;
             r.currentLogIndex=1; 
             assert.ok(raft.logIsUpToDate(r, 1, 1));
+            assert.ok(!raft.logIsUpToDate(r, 1, 0));
         });
     });
 });
@@ -52,14 +52,13 @@ describe('Raft.Election', function(){
         var r = "foo"; 
     });
     afterEach(function(){
-        clearTimeout(r.electionTimeout); 
+        clearTimeout(r.electionTimeout);
     });
-        it('Election increases term and votes for self', function(done){
+    it('Election increases term and votes for self', function(){
             r = new raft.Raft(0, [], function(n, d, e, a){
             assert.equal(1, r.currentTerm);
             assert.equal("candidate", r.curState);
             assert.equal(0, r.votedFor);
-            done();
         });
         raft.startElection(r);
     });
@@ -68,9 +67,21 @@ describe('Raft.Election', function(){
             e(new raft.VoteResponse(d.term, true));
             e(new raft.VoteResponse(d.term, true));
             a();
-            assert.equal("leader", r.curState);
         });
         raft.startElection(r);
+        assert.equal("leader", r.curState);
+    });
+    it('Lost election', function() {
+         r= new raft.Raft(0, [1,2], function(n, d, e, a) {
+            e(new raft.VoteResponse(d.term, false));
+            e(new raft.VoteResponse(d.term, true));
+            a();
+        });
+        // clear original timeout since we're calling manually
+        clearTimeout(r.electionTimeout);
+        raft.startElection(r);
+        assert.equal("candidate", r.curState);
+        assert.equal("", r.votedFor);
     });
 });
 
