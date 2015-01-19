@@ -60,6 +60,7 @@ describe('Raft.Election', function(){
             assert.equal("candidate", r.curState);
             assert.equal(0, r.votedFor);
         });
+        clearTimeout(r.electionTimeout);
         raft.startElection(r);
     });
     it('Declare winner with majority', function() {
@@ -74,6 +75,32 @@ describe('Raft.Election', function(){
     it('Lost election', function() {
          r= new raft.Raft(0, [1,2], function(n, d, e, a) {
             e(new raft.VoteResponse(d.term, false));
+            e(new raft.VoteResponse(d.term, true));
+            a();
+        });
+        // clear original timeout since we're calling manually
+        clearTimeout(r.electionTimeout);
+        raft.startElection(r);
+        assert.equal("candidate", r.curState);
+        assert.equal("", r.votedFor);
+     });
+     it('Votes only count for issuing term', function() {
+         r= new raft.Raft(0, [1,2], function(n, d, e, a) {
+            e(new raft.VoteResponse(d.term+1, true));
+            e(new raft.VoteResponse(d.term, true));
+            a();
+        });
+        // clear original timeout since we're calling manually
+        clearTimeout(r.electionTimeout);
+        raft.startElection(r);
+        assert.equal("candidate", r.curState);
+        assert.equal("", r.votedFor);
+    });
+    it('Only win if the term has not changed', function() {
+         r= new raft.Raft(0, [1,2,3,4], function(n, d, e, a) {
+            e(new raft.VoteResponse(d.term, true));
+            e(new raft.VoteResponse(d.term+1, true));
+            e(new raft.VoteResponse(d.term, true));
             e(new raft.VoteResponse(d.term, true));
             a();
         });

@@ -46,14 +46,14 @@ function startElection(r) {
             "lastLogIndex": r.currentLogIndex, 
             "lastLogTerm": r.currentTerm};
     var grantedCount = 0;
+    var electionTerm = r.currentTerm;
     r.send("/vote", voteReq, function(vRes) {
-        if (vRes.granted) {
+        if (electionTerm == vRes.term && vRes.granted) {
             grantedCount +=1;
-        } else {
-            // set currentTerm to max seen
-            // todo this state needs to kill the current election
-            // to enable, pass the req back in
-            r.currentTerm = Math.max(r.currentTerm, vRes.term);
+        } else if (vRes.term > r.currentTerm) {
+            // kill the election:
+            r.currentTerm = vRes.term;
+            electionTerm = -1; // force ignore lagging votes
         }
     }, function(){
         logger.info("Complete: " + grantedCount);
