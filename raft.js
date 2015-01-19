@@ -46,29 +46,38 @@ exports.Raft = function (id, others, send) {
                 "lastLogIndex": this.state.currentLogIndex, 
                 "lastLogTerm":this.state.currentTerm};
         var grantedCount = 0;
-        this.send("/vote", voteReq, function(vRes) {
+        this.send("/vote", voteReq, function(r, vRes) {
             if (vRes.granted) {
                 grantedCount +=1;
             } else {
                 // set currentTerm to max seen
                 // todo this state needs to kill the current election
-                this.state.currentTerm = Math.max(this.state.currentTerm, vRes.term);
+                r.state.currentTerm = Math.max(r.state.currentTerm, vRes.term);
             }
-        }, function(){
+        }, function(r){
             logger.info("Complete: " + grantedCount);
-            if (grantedCount > this.others.length/2) {
-                logger.info("Become leader");
-                becomeLeader();
+            if (grantedCount > r.others.length/2) {
+                logger.trace("Become leader");
+                r.becomeLeader();
             }
             else {
                 logger.info("Not elected. Schedule another election");
-                votedFor = "";
-                electionTimeout = newElectionTimeout();    
+                r.votedFor = "";
+                r.electionTimeout = newElectionTimeout();    
             }
         }); 
     };
 
     
+    this.becomeLeader = function() {
+        this.curState = this.states.leader;
+        this.timer = setInterval(function(r) { r.sendAppendEntry();},
+            1000 + Math.floor(Math.random() * 500), r);
+    };
+
+    // todo imple
+    this.sendAppendEntry = function() {};
+
     this.newElectionTimeout = function() {
         return setTimeout(function(a){
             logger.info("Election Timeout");

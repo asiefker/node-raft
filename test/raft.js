@@ -36,6 +36,12 @@ describe('Raft.State', function() {
 });
 
 describe('Raft.ElectionTimeout', function(){
+    beforeEach(function(){
+        var r = "foo"; 
+    });
+    afterEach(function(){
+        clearTimeout(r.electionTimeout); 
+    });
     it('Starts Election', function(done){
         this.timeout(3000);
         r = new raft.Raft(0, [], function(n, d, e, a){done();});
@@ -45,24 +51,28 @@ describe('Raft.ElectionTimeout', function(){
 
 describe('Raft.Election', function(){
     beforeEach(function(){
-        r = new raft.Raft();
-        // disable timeout to make tests faster
+        var r = "foo"; 
+    });
+    afterEach(function(){
         clearTimeout(r.electionTimeout); 
     });
-    it('Election increases term and votes for self', function(done){
-        var r = new raft.Raft(0, [], function(n, d, e, a){
+        it('Election increases term and votes for self', function(done){
+            r = new raft.Raft(0, [], function(n, d, e, a){
             assert.equal(1, r.state.currentTerm);
             assert.equal("candidate", r.curState);
             assert.equal(0, r.votedFor);
-            done();});
+            done();
+        });
+        r.startElection();
     });
     it('Declare winner with majority', function() {
-        var r = new raft.Raft(0, [1,2], function(n, d, e, a) {
-            e(new raft.VoteResponse(d.term, true));
-            e(new raft.VoteResponse(d.term, true));
-            a();
+        r= new raft.Raft(0, [1,2], function(n, d, e, a) {
+            e(r, new raft.VoteResponse(d.term, true));
+            e(r, new raft.VoteResponse(d.term, true));
+            a(r);
             assert.equal("leader", r.curState);
         });
+        r.startElection();
     });
 });
 
