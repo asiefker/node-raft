@@ -10,11 +10,12 @@
     "promise": "^6.0.1"
   },
   "devDependencies": {
-    "nodeunit" : "^0.9",
-    "mocha" : "^2.1.0"
+      "istanbul": "0.3.5",
+      "mocha" : "^2.1.0" 
   },
   "scripts": {
-    "test": "scripts/test.sh"
+    "test": "scripts/test.sh",
+    "coverage": "./node_modules/istanbul/lib/cli.js cover ./node_modules/mocha/bin/_mocha -- --ui bdd -R spec -t 5000"
   },
   "author": "Adam Siefker",
   "license": "ISC"
