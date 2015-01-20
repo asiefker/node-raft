@@ -2,6 +2,7 @@ var assert = require("assert");
 var log4js = require('log4js');
 
 var logger = log4js.getLogger();
+logger.setLevel('INFO');
 
 exports.VoteResponse = function(term, granted) {
     this.term = term;
@@ -23,9 +24,12 @@ exports.Raft = function (id, others, send) {
     this.curState= states.follower;
     this.others = others;
     this.send = send;
-    this.electionTimeout = newElectionTimeout(this);
     this.currentTerm = 0;
     this.currentLogIndex = 0;
+};
+
+exports.start = function(r) {
+    newElectionTimeout(r);
 };
 
 function logIsUpToDate(r, term, lastLogIndex) {
@@ -37,10 +41,11 @@ function logIsUpToDate(r, term, lastLogIndex) {
 }
 
 function startElection(r) {
-    logger.info("Requesting starting election");
+    logger.debug("Requesting starting election");
     r.curState = states.candidate;
     r.currentTerm += 1;
     r.votedFor = r.id;
+    newElectionTimeout(r);    
     voteReq = {"term": r.currentTerm, 
             "candidateId": r.id, 
             "lastLogIndex": r.currentLogIndex, 
@@ -53,10 +58,15 @@ function startElection(r) {
         } else if (vRes.term > r.currentTerm) {
             // kill the election:
             r.currentTerm = vRes.term;
+            r.curState = states.follower;
             electionTerm = -1; // force ignore lagging votes
         }
-    }, function(){
-        logger.info("Complete: " + grantedCount);
+    }, function() {
+        // we may have switched states for any number of reasons
+        // so bail
+        if (r.curState != states.candidate) {
+            return;
+        }
         if (grantedCount > r.others.length/2) {
             logger.trace("Become leader");
             becomeLeader(r);
@@ -64,7 +74,6 @@ function startElection(r) {
         else {
             logger.info("Not elected. Schedule another election");
             r.votedFor = "";
-            r.electionTimeout = newElectionTimeout(r);    
         }
     }); 
 }
@@ -76,8 +85,10 @@ function becomeLeader(r) {
 }
 
 function newElectionTimeout(r) {
-    return setTimeout(function(){
-        logger.info("Election Timeout");
+    // always clear timeout to be safe. 
+    clearTimeout(r.timeout); 
+    r.timeout = setTimeout(function(){
+        logger.debug("Election Timeout");
         startElection(r); 
     },
     1000 + Math.floor(Math.random() * 2000));
