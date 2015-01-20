@@ -2,14 +2,23 @@ var assert = require("assert");
 var log4js = require('log4js');
 
 var logger = log4js.getLogger();
-logger.setLevel('INFO');
+logger.setLevel('DEBUG');
 
-exports.VoteResponse = function(term, granted) {
-    this.term = term;
-    this.granted = granted;
-};
-exports.startElection = startElection;
-exports.logIsUpToDate = logIsUpToDate; 
+
+function voteResponse(term, granted) {
+    return {
+        term : term,
+        granted : granted
+    };
+}
+function voteRequest(candidate, currentTerm, lastLogTerm, lastLogIndex) {
+    return {
+        candidateId: candidate, 
+        term: currentTerm,
+        lastLogTerm: lastLogTerm,
+        lastLogIndex: lastLogIndex
+    };
+}
 
 /**
  * Create a Raft instance
@@ -18,26 +27,59 @@ exports.logIsUpToDate = logIsUpToDate;
  * @param send {function} - callback that takes 4 parameters: 
  *      name, map for the request, per success callback, completion callback
  */
-exports.Raft = function (id, others, send) {
+function Raft(id, others, send) {
     // Raft server states
     this.id = id;
     this.curState= states.follower;
+    this.currentTerm = 0;
+    this.currentLogTerm = 0;
+    this.currentLogIndex = 0;
+    this.votedFor = "";
     this.others = others;
     this.send = send;
-    this.currentTerm = 0;
-    this.currentLogIndex = 0;
+}
+Raft.prototype.toString = function() {
+    return "[object Raft{id="+this.id+", curState="+this.curState+
+                        ", currentTerm="+this.currentTerm + 
+                        ", currentLogTerm="+this.currentLogTerm+ 
+                        ", currentLogIndex="+this.currentLogIndex + 
+                        ", votedFor="+this.votedFor+"}]";
 };
 
 exports.start = function(r) {
     newElectionTimeout(r);
 };
 
-function logIsUpToDate(r, term, lastLogIndex) {
-    assert.ok(term > 0);
-    if (term == r.currentTerm) {
+function handleVoteRequest(r, voteReq) {
+    logger.info(voteReq);
+    logger.info(r.toString()); 
+    if (voteReq.term < r.currentTerm) {
+        return voteResponse(r.currentTerm, false);
+    } 
+    if ((voteReq.candidateId == r.votedFor || "" === r.votedFor) &&
+       logIsUpToDate(r, voteReq.lastLogTerm, voteReq.lastLogIndex)){
+        // Grant Vote
+        r.currentTerm = voteReq.term;
+        r.votedFor = voteReq.candidateId;
+        return voteResponse(r.currentTerm, true);
+    }
+    return voteResponse(r.currentTerm, false);
+}
+
+// todo test
+function handleAppendRequest(r, appendReq) {
+    logger.info("Clearing timeout");
+    newElectionTimeout(r); 
+    return {"currentTerm": r.currentTerm, "success": true};
+    // TODO: Implement the rest 
+}
+
+function logIsUpToDate(r, lastLogTerm, lastLogIndex) {
+    assert.ok(lastLogTerm > 0);
+    if (lastLogTerm == r.currentLogTerm) {
         return lastLogIndex >= r.currentLogIndex;
     }
-    return term > r.currentTerm;
+    return lastLogTerm > r.currentLogTerm;
 }
 
 function startElection(r) {
@@ -46,10 +88,7 @@ function startElection(r) {
     r.currentTerm += 1;
     r.votedFor = r.id;
     newElectionTimeout(r);    
-    voteReq = {"term": r.currentTerm, 
-            "candidateId": r.id, 
-            "lastLogIndex": r.currentLogIndex, 
-            "lastLogTerm": r.currentTerm};
+    voteReq = voteRequest(r.id, r.currentTerm, r.currentTerm, r.currentLogIndex);
     var grantedCount = 0;
     var electionTerm = r.currentTerm;
     r.send("/vote", voteReq, function(vRes) {
@@ -68,7 +107,7 @@ function startElection(r) {
             return;
         }
         if (grantedCount > r.others.length/2) {
-            logger.trace("Become leader");
+            logger.info("Become leader");
             becomeLeader(r);
         }
         else {
@@ -80,6 +119,7 @@ function startElection(r) {
 
 function becomeLeader(r) {
     r.curState = states.leader;
+    clearTimeout(r.timeout); 
     r.timer = setInterval(function() { sendAppendEntry(r);},
         1000 + Math.floor(Math.random() * 500), r);
 }
@@ -91,11 +131,20 @@ function newElectionTimeout(r) {
         logger.debug("Election Timeout");
         startElection(r); 
     },
-    1000 + Math.floor(Math.random() * 2000));
+    5000 + Math.floor(Math.random() * 2000));
 }
     
 // todo imple
-function sendAppendEntry(r) {}
+// add tests
+function sendAppendEntry(r) {
+    append = {"term": r.currentTerm, 
+        "leaderId": r.id, 
+        "prevLogIndex":0, 
+        "prevLogTerm":9, 
+        "entries":[], 
+        "leaderCommitIndex":0};
+    r.send("/append", append, function(a){}, function(){});
+}
 
 // Possible states of the raft server
 var states = {
@@ -104,3 +153,10 @@ var states = {
     leader: "leader"
 };
     
+exports.voteRequest = voteRequest;
+exports.voteResponse = voteResponse;
+exports.startElection = startElection;
+exports.logIsUpToDate = logIsUpToDate; 
+exports.handleVoteRequest = handleVoteRequest; 
+exports.handleAppendRequest = handleAppendRequest;
+exports.Raft = Raft;
