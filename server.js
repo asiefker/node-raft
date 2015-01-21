@@ -8,6 +8,7 @@ var raft = require("./raft");
 var url = require('url');
 
 var logger = log4js.getLogger();
+logger.setLevel('INFO');
 
 logger.info("Args " + process.argv);
 var id = process.argv[2];
@@ -31,7 +32,7 @@ http.createServer(function (req, res) {
             res.writeHead(200, "OK", {'Content-Type': 'application/json'});
             var decoded = querystring.parse(body);
             if (paths[q.path] !== undefined) {
-                logger.info("dispatching to handler: " + body);
+                logger.debug("dispatching to handler: " + body);
                 res.writeHead(200, {'Content-Type': 'application/json'});
                 res.write(JSON.stringify(paths[q.path](r ,JSON.parse(body))));
             }

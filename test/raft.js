@@ -40,12 +40,12 @@ describe('Raft.ElectionTimeout', function(){
         clearTimeout(r.timeout); 
     });
     it('Starts Election', function(done){
-        this.timeout(7000);
+        this.timeout(2000);
         r = new raft.Raft(0, [], function(n, d, e, a){done();});
         raft.start(r);
     });
     it('Starts Election on timeout', function(done) {
-        this.timeout(7000);
+        this.timeout(2000);
         r = new raft.Raft(0, [], function(n, d, e, a){done();});
         raft.startElection(r);
     });

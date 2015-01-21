@@ -2,7 +2,7 @@ var assert = require("assert");
 var log4js = require('log4js');
 
 var logger = log4js.getLogger();
-logger.setLevel('DEBUG');
+logger.setLevel('INFO');
 
 
 function voteResponse(term, granted) {
@@ -68,7 +68,7 @@ function handleVoteRequest(r, voteReq) {
 
 // todo test
 function handleAppendRequest(r, appendReq) {
-    logger.info("Clearing timeout");
+    logger.trace("Clearing timeout");
     newElectionTimeout(r); 
     return {"currentTerm": r.currentTerm, "success": true};
     // TODO: Implement the rest 
@@ -83,7 +83,7 @@ function logIsUpToDate(r, lastLogTerm, lastLogIndex) {
 }
 
 function startElection(r) {
-    logger.debug("Requesting starting election");
+    logger.info("Requesting starting election");
     r.curState = states.candidate;
     r.currentTerm += 1;
     r.votedFor = r.id;
@@ -121,17 +121,16 @@ function becomeLeader(r) {
     r.curState = states.leader;
     clearTimeout(r.timeout); 
     r.timer = setInterval(function() { sendAppendEntry(r);},
-        1000 + Math.floor(Math.random() * 500), r);
+        100 + Math.floor(Math.random() * 200), r);
 }
 
 function newElectionTimeout(r) {
     // always clear timeout to be safe. 
     clearTimeout(r.timeout); 
     r.timeout = setTimeout(function(){
-        logger.debug("Election Timeout");
         startElection(r); 
     },
-    5000 + Math.floor(Math.random() * 2000));
+    1000 + Math.floor(Math.random() * 2000));
 }
     
 // todo imple
