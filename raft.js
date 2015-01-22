@@ -4,6 +4,15 @@ var log4js = require('log4js');
 var logger = log4js.getLogger();
 logger.setLevel('INFO');
 
+function appendEntryRequest(id, currentTerm, prevLogTerm, prevLogIndex,  
+                            commitIndex, entries) {
+    return {term: currentTerm, 
+        leaderId: id, 
+        prevLogIndex: prevLogIndex, 
+        prevLogTerm: prevLogTerm, 
+        entries: entries, 
+        leaderCommitIndex:commitIndex};
+}
 
 function voteResponse(term, granted) {
     return {
@@ -69,7 +78,12 @@ function handleVoteRequest(r, voteReq) {
 // todo test
 function handleAppendRequest(r, appendReq) {
     logger.trace("Clearing timeout");
-    newElectionTimeout(r); 
+    newElectionTimeout(r);
+    if (r.curState == states.candidate && 
+       appendReq.term > r.currentTerm) {
+        r.curState = states.follower;
+        r.currentTerm = appendReq.term;
+    }
     return {"currentTerm": r.currentTerm, "success": true};
     // TODO: Implement the rest 
 }
@@ -83,7 +97,7 @@ function logIsUpToDate(r, lastLogTerm, lastLogIndex) {
 }
 
 function startElection(r) {
-    logger.info("Requesting starting election");
+    logger.info("Requesting election");
     r.curState = states.candidate;
     r.currentTerm += 1;
     r.votedFor = r.id;
@@ -119,8 +133,16 @@ function startElection(r) {
 
 function becomeLeader(r) {
     r.curState = states.leader;
+    newHeartbeatTimeout(r);
+}
+
+function newHeartbeatTimeout(r) {
     clearTimeout(r.timeout); 
-    r.timer = setInterval(function() { sendAppendEntry(r);},
+    r.timeout = setInterval(function() { 
+        if (r.curState == states.leader) {
+            sendAppendEntry(r);
+            newHeartbeatTimeout(r);
+        }},
         100 + Math.floor(Math.random() * 200), r);
 }
 
@@ -136,12 +158,8 @@ function newElectionTimeout(r) {
 // todo imple
 // add tests
 function sendAppendEntry(r) {
-    append = {"term": r.currentTerm, 
-        "leaderId": r.id, 
-        "prevLogIndex":0, 
-        "prevLogTerm":9, 
-        "entries":[], 
-        "leaderCommitIndex":0};
+    append = appendEntryRequest(r.id, r.currentTerm, 
+        9, 0, 0, []); 
     r.send("/append", append, function(a){}, function(){});
 }
 
@@ -152,6 +170,7 @@ var states = {
     leader: "leader"
 };
     
+exports.appendEntryRequest = appendEntryRequest;
 exports.voteRequest = voteRequest;
 exports.voteResponse = voteResponse;
 exports.startElection = startElection;

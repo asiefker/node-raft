@@ -132,6 +132,33 @@ describe('Raft.Election', function(){
         assert.equal("", r.votedFor);
         assert.equal(2, r.currentTerm);
     });
+    it('Become follower if heartbeat received during election', function() {
+        r= new raft.Raft(0, [1,2,4,5], function(n, d, e, a) {
+            e(raft.voteResponse(d.term, true));
+            raft.handleAppendRequest(r, raft.appendEntryRequest(1, 3, 0,0,0,[]));
+            e(raft.voteResponse(d.term, true));
+            a();
+        });
+        // clear original timeout since we're calling manually
+        raft.startElection(r);
+        assert.equal("follower", r.curState);
+        assert.equal("", r.votedFor);
+        assert.equal(3, r.currentTerm);
+    });
+    it('Ignore heartbeat for older term', function() {
+        r= new raft.Raft(0, [1,2,3,4], function(n, d, e, a) {
+            console.log(d.term);
+            e(raft.voteResponse(d.term, true));
+            raft.handleAppendRequest(r, raft.appendEntryRequest(1, 1, 0,0,0,[]));
+            e(raft.voteResponse(d.term, true));
+            a();
+        });
+        // clear original timeout since we're calling manually
+        raft.startElection(r);
+        assert.equal("leader", r.curState);
+        assert.equal("", r.votedFor);
+        assert.equal(1, r.currentTerm);
+    });
 });
 
 
