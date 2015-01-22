@@ -111,7 +111,7 @@ describe('Raft.Election', function(){
     it('Lost election', function() {
          r= new raft.Raft(0, [1,2], function(n, d, e, a) {
             e(raft.voteResponse(d.term, false));
-            e(raft.voteResponse(d.term, true));
+            e(raft.voteResponse(d.term, false));
             a();
         });
         raft.startElection(r);

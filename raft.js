@@ -89,7 +89,7 @@ function startElection(r) {
     r.votedFor = r.id;
     newElectionTimeout(r);    
     voteReq = voteRequest(r.id, r.currentTerm, r.currentTerm, r.currentLogIndex);
-    var grantedCount = 0;
+    var grantedCount = 1;
     var electionTerm = r.currentTerm;
     r.send("/vote", voteReq, function(vRes) {
         if (electionTerm == vRes.term && vRes.granted) {

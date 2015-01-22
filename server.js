@@ -61,7 +61,7 @@ function sendAll(path, jsonBody, eachCB, finalCB) {
         var endpoint = "http://localhost:"+port+path;
         needle.post(endpoint, jsonBody, {'json': 'true', 'timeout': 200}, function(err, resp){
             if (err) {
-                logger.warn(endpoint + "failed to respond: " + err);
+                logger.trace(endpoint + "failed to respond: " + err);
             } else {
                 eachCB(resp.body);
             }
