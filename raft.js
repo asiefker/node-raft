@@ -84,6 +84,9 @@ function handleAppendRequest(r, appendReq) {
         r.curState = states.follower;
         r.currentTerm = appendReq.term;
     }
+    if (r.currentTerm > appendReq.term) {
+        return {"currentTerm": r.currentTerm, "success": false};
+    }
     return {"currentTerm": r.currentTerm, "success": true};
     // TODO: Implement the rest 
 }
@@ -139,6 +142,9 @@ function becomeLeader(r) {
 function newHeartbeatTimeout(r) {
     clearTimeout(r.timeout); 
     r.timeout = setInterval(function() { 
+        // if check is probably not needed since
+        // a state transition would cancle the timer and 
+        // prevent the callback from firing. 
         if (r.curState == states.leader) {
             sendAppendEntry(r);
             newHeartbeatTimeout(r);
