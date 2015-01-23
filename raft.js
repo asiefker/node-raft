@@ -46,6 +46,7 @@ function Raft(id, others, send) {
     this.votedFor = "";
     this.others = others;
     this.send = send;
+    this.log = [];
 }
 Raft.prototype.toString = function() {
     return "[object Raft{id="+this.id+", curState="+this.curState+
@@ -85,6 +86,17 @@ function handleAppendRequest(r, appendReq) {
         r.currentTerm = appendReq.term;
     }
     if (r.currentTerm > appendReq.term) {
+        return {"currentTerm": r.currentTerm, "success": false};
+    }
+    // bootstrap first entry
+    if (r.log.length === 0 && appendReq.prevLogIndex== -1) {
+        // skip for now 
+        r.log[0] = {term: appendReq.term, command: appendReq.entries[0]};
+    return {"currentTerm": r.currentTerm, "success": true};
+    } 
+    
+    if ( !r.log[appendReq.lastLogIndex] || // entry not present
+       r.log[appendReq.lastLogIndex].term != appendReq.lastLogTerm) {
         return {"currentTerm": r.currentTerm, "success": false};
     }
     return {"currentTerm": r.currentTerm, "success": true};

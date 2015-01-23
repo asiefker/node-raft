@@ -34,7 +34,7 @@ describe('Raft.State', function() {
 
 describe('Raft.ElectionTimeout', function(){
     beforeEach(function(){
-        var r = "foo"; 
+        r = "foo"; 
     });
     afterEach(function(){
         clearTimeout(r.timeout); 
@@ -86,7 +86,7 @@ describe('Raft.handleVoteRequest', function() {
 
 describe('Raft.Election', function(){
     beforeEach(function(){
-        var r = "foo"; 
+        r = "foo"; 
     });
     afterEach(function(){
         clearTimeout(r.timeout);
@@ -160,7 +160,7 @@ describe('Raft.Election', function(){
 
 describe('Raft.handleAppendRequests', function() {
     beforeEach(function(){
-        var r= new raft.Raft(0, [1,2,3,4], function(n, d, e, a) {});
+        r= new raft.Raft(0, [1,2,3,4], function(n, d, e, a) {});
     });
     afterEach(function(){
         clearTimeout(r.timeout);
@@ -170,5 +170,27 @@ describe('Raft.handleAppendRequests', function() {
         var res = raft.handleAppendRequest(r, raft.appendEntryRequest(1, 1, 0,0,0,[]));
         assert.ok(!res.success);
         assert.equal(3, res.currentTerm);
+    });
+    it('Reply false if log is missing entry at previous index', function() {
+        r.currentTerm = 1;
+        var res = raft.handleAppendRequest(r, raft.appendEntryRequest(1, 1, 1,2,0,[]));
+        assert.ok(! res.success);
+        assert.equal(1, res.currentTerm);
+    });
+    it('Reply false if log enty at previous index has wrong term', function() {
+        r.currentTerm = 2;
+        r.log= [{term:1, command:""}];
+        var res = raft.handleAppendRequest(r, raft.appendEntryRequest(1, 2, 2,0,0,[]));
+        assert.ok(! res.success);
+        assert.equal(2, res.currentTerm);
+    });
+    it('Append first entry to log', function() {
+        r.currentTerm = 1;
+        var e = "command";
+        var res = raft.handleAppendRequest(r, raft.appendEntryRequest(1, 1,1,-1,0,[e]));
+        assert.ok(res.success);
+        assert.equal(1, res.currentTerm);
+        assert.equal(1, r.log.length);
+        assert.equal(e, r.log[0].command);
     });
 });
