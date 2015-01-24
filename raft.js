@@ -95,7 +95,8 @@ function handleAppendRequest(r, appendReq) {
        r.log[appendReq.prevLogIndex].term != appendReq.prevLogTerm) {
         return {"currentTerm": r.currentTerm, "success": false};
     }
-    r.log[appendReq.prevLogIndex] = {term: appendReq.term, command: appendReq.entries[0]};
+    var startIdx = appendReq.prevLogIndex + 1;
+    r.log[startIdx] = appendReq.entries[0];
     return {"currentTerm": r.currentTerm, "success": true};
     // TODO: Implement the rest 
 }

@@ -179,18 +179,19 @@ describe('Raft.handleAppendRequests', function() {
     });
     it('Reply false if log enty at previous index has wrong term', function() {
         r.currentTerm = 2;
-        r.log= [{term:1, command:""}];
-        var res = raft.handleAppendRequest(r, raft.appendEntryRequest(1, 2, 2,0,0,[]));
+        r.log.push({term:1, command:""});
+        var res = raft.handleAppendRequest(r, raft.appendEntryRequest(1, 2, 2,1,0,[]));
         assert.ok(! res.success);
         assert.equal(2, res.currentTerm);
     });
     it('Append first entry to log', function() {
         r.currentTerm = 1;
-        var e = "command";
-        var res = raft.handleAppendRequest(r, raft.appendEntryRequest(1,1,0,0,0,[e]));
+        var e = {term:1, command:e};
+        var res = raft.handleAppendRequest(r, raft.appendEntryRequest(1,1,0,0,0,
+                                                                      [e]));
         assert.ok(res.success);
         assert.equal(1, res.currentTerm);
-        assert.equal(1, r.log.length);
-        assert.equal(e, r.log[0].command);
+        assert.equal(2, r.log.length);
+        assert.equal(e, r.log[1]);
     });
 });
