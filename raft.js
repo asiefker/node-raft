@@ -53,6 +53,8 @@ function Raft(id, others, send) {
     this.termOfLastLog = function () {
         return this.log[this.log.length-1].term;
     };
+    this.nextIndex = {};
+    this.matchIndex = {};
 }
 Raft.prototype.toString = function() {
     return "[object Raft{id="+this.id+", curState="+this.curState+
@@ -90,8 +92,7 @@ function handleAppendRequest(r, appendReq) {
     newElectionTimeout(r);
     if (r.curState == states.candidate && 
        appendReq.term > r.currentTerm) {
-        r.curState = states.follower;
-        r.currentTerm = appendReq.term;
+       becomeFollower(r, appendReq.term);
     }
     if (r.currentTerm > appendReq.term) {
         logger.warn("term mismatch");
@@ -141,8 +142,7 @@ function logIsUpToDate(r, lastLogTerm, lastLogIndex) {
 
 function startElection(r) {
     logger.info("Requesting election");
-    r.curState = states.candidate;
-    r.currentTerm += 1;
+    becomeCandidate(r);
     r.votedFor = r.id;
     newElectionTimeout(r);    
     voteReq = voteRequest(r.id, r.currentTerm, r.currentTerm, r.currentLogIndex);
@@ -153,8 +153,7 @@ function startElection(r) {
             grantedCount +=1;
         } else if (vRes.term > r.currentTerm) {
             // kill the election:
-            r.currentTerm = vRes.term;
-            r.curState = states.follower;
+            becomeFollower(r, vRes.term);
             electionTerm = -1; // force ignore lagging votes
         }
     }, function() {
@@ -177,6 +176,23 @@ function startElection(r) {
 function becomeLeader(r) {
     r.curState = states.leader;
     newHeartbeatTimeout(r);
+    r.others.map(function(y){r.nextIndex[y]=r.indexOfLastLog()+1;});
+    r.others.map(function(y){r.matchIndex[y]=0;});
+}
+
+function becomeFollower(r, newTerm) {
+    r.curState = states.follower;
+    r.currentTerm = newTerm;
+    r.nextIndex = {};
+    r.matchIndex = {};
+    newElectionTimeout(r);
+}
+
+function becomeCandidate(r) {
+    r.curState = states.candidate;
+    r.currentTerm += 1;
+    r.nextIndex = {};
+    r.matchIndex = {};
 }
 
 function newHeartbeatTimeout(r) {
@@ -205,7 +221,7 @@ function newElectionTimeout(r) {
 // add tests
 function sendAppendEntry(r) {
     append = appendEntryRequest(r.id, r.currentTerm, 
-        9, 0, 0, []); 
+        r.termOfLastLog(), r.indexOfLastLog(), r.commitIndex, []); 
     r.send("/append", append, function(a){}, function(){});
 }
 
