@@ -231,6 +231,14 @@ describe('Raft.handleAppendRequests', function() {
                                                                       newEntries));
         assert.ok(res.success);
         assert.equal(4, r.log.length);
-           
+    });
+    it("Heartbeat advances commit index", function(){
+        r.currentTerm = 1;
+        for (i=0; i<5; i++) {
+            r.log.push({term:1, command:""});
+        }
+        var res = raft.handleAppendRequest(r, raft.appendEntryRequest(1, 1, 1,5,3,[]));
+        assert.ok(res.success);
+        assert.equal(3, r.commitIndex);
     });
 });

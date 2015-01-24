@@ -45,7 +45,7 @@ function Raft(id, others, send) {
     this.others = others;
     this.send = send;
     this.log = [{term: 0}];
-    this.commitInex = 0;
+    this.commitIndex = 0;
     this.lastApplied = 0;
     this.indexOfLastLog = function() {
         return this.log.length - 1; 
@@ -84,6 +84,8 @@ function handleVoteRequest(r, voteReq) {
 
 // todo test
 function handleAppendRequest(r, appendReq) {
+    logger.trace(r);
+    logger.trace(appendReq);
     logger.trace("Clearing timeout");
     newElectionTimeout(r);
     if (r.curState == states.candidate && 
@@ -92,11 +94,13 @@ function handleAppendRequest(r, appendReq) {
         r.currentTerm = appendReq.term;
     }
     if (r.currentTerm > appendReq.term) {
+        logger.warn("term mismatch");
         return {"currentTerm": r.currentTerm, "success": false};
     }
     
     if ( !r.log[appendReq.prevLogIndex] || // entry not present
        r.log[appendReq.prevLogIndex].term != appendReq.prevLogTerm) {
+        logger.warn("Previous doesn't match");
         return {"currentTerm": r.currentTerm, "success": false};
     }
     // heartbeat has empty logs, so skip the append step 
@@ -121,10 +125,10 @@ function handleAppendRequest(r, appendReq) {
         r.log = r.log.concat(appendReq.entries.slice(newLogIdx));
     }
     if (appendReq.leaderCommitIndex > r.commitIndex) {
-        r.commitIndex = min(appendReq.leaderCommitIndex, r.log.length-1);
+        r.commitIndex = Math.min(appendReq.leaderCommitIndex, r.log.length-1);
+        // TODO: Trigger apply calls. Maybe with events?  
     }
     return {"currentTerm": r.currentTerm, "success": true};
-    // TODO: Implement the rest 
 }
 
 function logIsUpToDate(r, lastLogTerm, lastLogIndex) {
