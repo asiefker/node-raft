@@ -80,8 +80,6 @@ function handleVoteRequest(r, voteReq) {
 function handleAppendRequest(r, appendReq) {
     logger.trace("Clearing timeout");
     newElectionTimeout(r);
-    logger.info(r);
-    logger.info(appendReq);
     if (r.curState == states.candidate && 
        appendReq.term > r.currentTerm) {
         r.curState = states.follower;
@@ -98,15 +96,25 @@ function handleAppendRequest(r, appendReq) {
     // heartbeat has empty logs, so skip the append step 
     if (appendReq.entries.length > 0) {
         var startIdx = appendReq.prevLogIndex + 1;
+        var newLogIdx = 0;
         if (startIdx < r.log.length) {
             // do consistency check, since append is not at end of r.log
-            if (r.log[startIdx].term != appendReq.entries[0].term) {
-                r.log.splice(startIdx, r.log.length);
+            for (i = startIdx; i<r.log.length; i++) {
+                if (r.log[i].term != appendReq.entries[newLogIdx].term) {
+                    r.log.splice(i, r.log.length);
+                    // found inconsistency, so we're done. 
+                    break;
+                }
+                newLogIdx++;
+                if (newLogIdx == appendReq.entries.length) {
+                    // iterated over the new logs and they all match. 
+                    break;
+                }
             }
         }
-        r.log[startIdx] = appendReq.entries[0];
+        r.log = r.log.concat(appendReq.entries.slice(newLogIdx));
     }
-   return {"currentTerm": r.currentTerm, "success": true};
+    return {"currentTerm": r.currentTerm, "success": true};
     // TODO: Implement the rest 
 }
 

@@ -207,4 +207,32 @@ describe('Raft.handleAppendRequests', function() {
         assert.equal(3, r.log.length);
         assert.equal(entry, r.log[2]);
     });
+    it('Multi entry support', function(){
+        // append multipe new entries, remove multiple conflicts from the middle
+        r.currentTerm = 2;
+        r.log.push({term:1, command:"committed"}, 
+                   {term:2, command:"remove"},
+                   {term:2, command:"remove"});
+        var newEntries = [{term:1, command:"committed"}, 
+                        {term:1, command: "replace"},
+                        {term:2, command: "replace again"}];
+        var res = raft.handleAppendRequest(r, raft.appendEntryRequest(1, 2, 0,0,0,
+                                                                      newEntries));
+        assert.ok(res.success);
+        assert.equal(4, r.log.length);
+        assert.deepEqual(newEntries, r.log.slice(1));
+    });
+    it('AppendLogs subset of committed logs', function() {
+        r.currentTerm = 2;
+        r.log.push({term:1, command:"committed"}, 
+                   {term:2, command:"good"},
+                   {term:2, command:"good"});
+        var newEntries = [{term:1, command:"committed"}, 
+                        {term:2, command: "good"}];
+        var res = raft.handleAppendRequest(r, raft.appendEntryRequest(1, 2, 0,0,0,
+                                                                      newEntries));
+        assert.ok(res.success);
+        assert.equal(4, r.log.length);
+           
+    });
 });
