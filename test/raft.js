@@ -186,12 +186,25 @@ describe('Raft.handleAppendRequests', function() {
     });
     it('Append first entry to log', function() {
         r.currentTerm = 1;
-        var e = {term:1, command:e};
+        var e = {term:1, command:""};
         var res = raft.handleAppendRequest(r, raft.appendEntryRequest(1,1,0,0,0,
                                                                       [e]));
         assert.ok(res.success);
         assert.equal(1, res.currentTerm);
         assert.equal(2, r.log.length);
         assert.equal(e, r.log[1]);
+    });
+    it('Remove conflicting log entries', function() {
+        r.currentTerm = 2;
+        // follower got some uncommitted state from a different leader that then died. 
+        r.log.push({term:1, comand:"committed"}, 
+                   {term:2, command:"remove"},
+                   {term:2, command:"remove"});
+        var entry = {term:1, command:"new"};
+        var res = raft.handleAppendRequest(r, raft.appendEntryRequest(1, 2, 1,1,0,
+                                                                      [entry]));
+        assert.ok(res.success);
+        assert.equal(3, r.log.length);
+        assert.equal(entry, r.log[2]);
     });
 });

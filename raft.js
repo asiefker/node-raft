@@ -95,9 +95,18 @@ function handleAppendRequest(r, appendReq) {
        r.log[appendReq.prevLogIndex].term != appendReq.prevLogTerm) {
         return {"currentTerm": r.currentTerm, "success": false};
     }
-    var startIdx = appendReq.prevLogIndex + 1;
-    r.log[startIdx] = appendReq.entries[0];
-    return {"currentTerm": r.currentTerm, "success": true};
+    // heartbeat has empty logs, so skip the append step 
+    if (appendReq.entries.length > 0) {
+        var startIdx = appendReq.prevLogIndex + 1;
+        if (startIdx < r.log.length) {
+            // do consistency check, since append is not at end of r.log
+            if (r.log[startIdx].term != appendReq.entries[0].term) {
+                r.log.splice(startIdx, r.log.length);
+            }
+        }
+        r.log[startIdx] = appendReq.entries[0];
+    }
+   return {"currentTerm": r.currentTerm, "success": true};
     // TODO: Implement the rest 
 }
 
