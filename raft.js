@@ -14,8 +14,9 @@ function appendEntryRequest(id, currentTerm, prevLogTerm, prevLogIndex,
         leaderCommitIndex:commitIndex};
 }
 
-function voteResponse(term, granted) {
+function voteResponse(id, term, granted) {
     return {
+        id: id,
         term : term,
         granted : granted
     };
@@ -72,19 +73,18 @@ function handleVoteRequest(r, voteReq) {
     logger.info(voteReq);
     logger.info(r.toString()); 
     if (voteReq.term < r.currentTerm) {
-        return voteResponse(r.currentTerm, false);
+        return voteResponse(r.id, r.currentTerm, false);
     } 
     if ((voteReq.candidateId == r.votedFor || "" === r.votedFor) &&
        logIsUpToDate(r, voteReq.lastLogTerm, voteReq.lastLogIndex)){
         // Grant Vote
         r.currentTerm = voteReq.term;
         r.votedFor = voteReq.candidateId;
-        return voteResponse(r.currentTerm, true);
+        return voteResponse(r.id, r.currentTerm, true);
     }
-    return voteResponse(r.currentTerm, false);
+    return voteResponse(r.id, r.currentTerm, false);
 }
 
-// todo test
 function handleAppendRequest(r, appendReq) {
     logger.trace(r);
     logger.trace(appendReq);
@@ -92,7 +92,7 @@ function handleAppendRequest(r, appendReq) {
     newElectionTimeout(r);
     if (r.curState == states.candidate && 
        appendReq.term > r.currentTerm) {
-       becomeFollower(r, appendReq.term);
+       becomeFollower(r, appendReq.leaderId, appendReq.term);
     }
     if (r.currentTerm > appendReq.term) {
         logger.warn("term mismatch");
@@ -153,7 +153,7 @@ function startElection(r) {
             grantedCount +=1;
         } else if (vRes.term > r.currentTerm) {
             // kill the election:
-            becomeFollower(r, vRes.term);
+            becomeFollower(r, vRes.id, vRes.term);
             electionTerm = -1; // force ignore lagging votes
         }
     }, function() {
@@ -175,13 +175,15 @@ function startElection(r) {
 
 function becomeLeader(r) {
     r.curState = states.leader;
+    r.leader = r.id;
     newHeartbeatTimeout(r);
     r.others.map(function(y){r.nextIndex[y]=r.indexOfLastLog()+1;});
     r.others.map(function(y){r.matchIndex[y]=0;});
 }
 
-function becomeFollower(r, newTerm) {
+function becomeFollower(r, leader, newTerm) {
     r.curState = states.follower;
+    r.leader = leader;
     r.currentTerm = newTerm;
     r.nextIndex = {};
     r.matchIndex = {};

@@ -99,8 +99,8 @@ describe('Raft.Election', function(){
     });
     it('Declare winner with majority', function() {
         r= new raft.Raft(0, [1,2], function(n, d, e, a) {
-            e(raft.voteResponse(d.term, true));
-            e(raft.voteResponse(d.term, true));
+            e(raft.voteResponse(1, d.term, true));
+            e(raft.voteResponse(2, d.term, true));
             a();
         });
         raft.startElection(r);
@@ -108,8 +108,8 @@ describe('Raft.Election', function(){
     });
     it('Lost election', function() {
          r= new raft.Raft(0, [1,2], function(n, d, e, a) {
-            e(raft.voteResponse(d.term, false));
-            e(raft.voteResponse(d.term, false));
+            e(raft.voteResponse(1, d.term, false));
+            e(raft.voteResponse(2, d.term, false));
             a();
         });
         raft.startElection(r);
@@ -118,10 +118,10 @@ describe('Raft.Election', function(){
      });
      it('Become follower if larger term is seen', function() {
          r= new raft.Raft(0, [1,2,3,4], function(n, d, e, a) {
-            e(raft.voteResponse(d.term, true));
-            e(raft.voteResponse(d.term+1, true));
-            e(raft.voteResponse(d.term, true));
-            e(raft.voteResponse(d.term, true));
+            e(raft.voteResponse(1, d.term, true));
+            e(raft.voteResponse(2, d.term+1, true));
+            e(raft.voteResponse(3, d.term, true));
+            e(raft.voteResponse(4, d.term, true));
             a();
         });
         // clear original timeout since we're calling manually
@@ -132,25 +132,27 @@ describe('Raft.Election', function(){
     });
     it('Become follower if heartbeat received during election', function() {
         r= new raft.Raft(0, [1,2,4,5], function(n, d, e, a) {
-            e(raft.voteResponse(d.term, true));
+            e(raft.voteResponse(2, d.term, true));
             raft.handleAppendRequest(r, raft.appendEntryRequest(1, 3, 0,0,0,[]));
-            e(raft.voteResponse(d.term, true));
+            e(raft.voteResponse(1, d.term, true));
             a();
         });
         raft.startElection(r);
         assert.equal("follower", r.curState);
+        assert.equal(1, r.leader);
         assert.equal("", r.votedFor);
         assert.equal(3, r.currentTerm);
     });
     it('Ignore heartbeat for older term', function() {
         r= new raft.Raft(0, [1,2,3,4], function(n, d, e, a) {
-            e(raft.voteResponse(d.term, true));
+            e(raft.voteResponse(1, d.term, true));
             raft.handleAppendRequest(r, raft.appendEntryRequest(1, 1, 0,0,0,[]));
-            e(raft.voteResponse(d.term, true));
+            e(raft.voteResponse(2, d.term, true));
             a();
         });
         raft.startElection(r);
         assert.equal("leader", r.curState);
+        assert.equal(0, r.leader);
         assert.equal("", r.votedFor);
         assert.equal(1, r.currentTerm);
     });
