@@ -14,7 +14,7 @@ describe('Raft.State', function() {
         });
 
         it('Reply false if term < currentTerm', function(){
-            r.currentLogTerm = 2;
+            r.log.push({term:2, command:""});
             assert.ok(!raft.logIsUpToDate(r, 1, 0));    
         });
 
@@ -24,8 +24,7 @@ describe('Raft.State', function() {
 
         it('Reply true if terms == currentTerm and lastLogIndex > currentLogIndex', function() {
             r.currentTerm = 1;
-            r.currentLogTerm = 1;
-            r.currentLogIndex=1; 
+            r.log.push({term:1, command:""});
             assert.ok(raft.logIsUpToDate(r, 1, 1));
             assert.ok(!raft.logIsUpToDate(r, 1, 0));
         });
@@ -76,8 +75,7 @@ describe('Raft.handleVoteRequest', function() {
     it('Deny vote is candidate log is behind', function() {
         r = new raft.Raft(0, [], function(){});
         r.currentTerm = 1;
-        r.currentLogIndex = 1;
-        r.currentLogTerm = 1;
+        r.log.push({term: 1, command:""});
         res = raft.handleVoteRequest(r, raft.voteRequest(1, 2, 1, 0));
         assert.ok(!res.granted);
         assert.equal(1, res.term);

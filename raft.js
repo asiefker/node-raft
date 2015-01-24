@@ -41,18 +41,24 @@ function Raft(id, others, send) {
     this.id = id;
     this.curState= states.follower;
     this.currentTerm = 0;
-    this.currentLogTerm = 0;
-    this.currentLogIndex = 0;
     this.votedFor = "";
     this.others = others;
     this.send = send;
     this.log = [{term: 0}];
+    this.commitInex = 0;
+    this.lastApplied = 0;
+    this.indexOfLastLog = function() {
+        return this.log.length - 1; 
+    };
+    this.termOfLastLog = function () {
+        return this.log[this.log.length-1].term;
+    };
 }
 Raft.prototype.toString = function() {
     return "[object Raft{id="+this.id+", curState="+this.curState+
                         ", currentTerm="+this.currentTerm + 
-                        ", currentLogTerm="+this.currentLogTerm+ 
-                        ", currentLogIndex="+this.currentLogIndex + 
+                        ", currentLogTerm="+this.termOfLastLog()+ 
+                        ", indexOfLastLog="+this.indexOfLastLog()+ 
                         ", votedFor="+this.votedFor+"}]";
 };
 
@@ -114,16 +120,19 @@ function handleAppendRequest(r, appendReq) {
         }
         r.log = r.log.concat(appendReq.entries.slice(newLogIdx));
     }
+    if (appendReq.leaderCommitIndex > r.commitIndex) {
+        r.commitIndex = min(appendReq.leaderCommitIndex, r.log.length-1);
+    }
     return {"currentTerm": r.currentTerm, "success": true};
     // TODO: Implement the rest 
 }
 
 function logIsUpToDate(r, lastLogTerm, lastLogIndex) {
     assert.ok(lastLogTerm > 0);
-    if (lastLogTerm == r.currentLogTerm) {
-        return lastLogIndex >= r.currentLogIndex;
+    if (lastLogTerm == r.termOfLastLog()) {
+        return lastLogIndex >= r.indexOfLastLog();
     }
-    return lastLogTerm > r.currentLogTerm;
+    return lastLogTerm > r.termOfLastLog();
 }
 
 function startElection(r) {
