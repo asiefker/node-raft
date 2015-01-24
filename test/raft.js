@@ -187,7 +187,7 @@ describe('Raft.handleAppendRequests', function() {
     it('Append first entry to log', function() {
         r.currentTerm = 1;
         var e = "command";
-        var res = raft.handleAppendRequest(r, raft.appendEntryRequest(1, 1,1,-1,0,[e]));
+        var res = raft.handleAppendRequest(r, raft.appendEntryRequest(1,1,0,0,0,[e]));
         assert.ok(res.success);
         assert.equal(1, res.currentTerm);
         assert.equal(1, r.log.length);

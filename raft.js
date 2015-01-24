@@ -46,7 +46,7 @@ function Raft(id, others, send) {
     this.votedFor = "";
     this.others = others;
     this.send = send;
-    this.log = [];
+    this.log = [{term: 0}];
 }
 Raft.prototype.toString = function() {
     return "[object Raft{id="+this.id+", curState="+this.curState+
@@ -80,6 +80,8 @@ function handleVoteRequest(r, voteReq) {
 function handleAppendRequest(r, appendReq) {
     logger.trace("Clearing timeout");
     newElectionTimeout(r);
+    logger.info(r);
+    logger.info(appendReq);
     if (r.curState == states.candidate && 
        appendReq.term > r.currentTerm) {
         r.curState = states.follower;
@@ -88,17 +90,12 @@ function handleAppendRequest(r, appendReq) {
     if (r.currentTerm > appendReq.term) {
         return {"currentTerm": r.currentTerm, "success": false};
     }
-    // bootstrap first entry
-    if (r.log.length === 0 && appendReq.prevLogIndex== -1) {
-        // skip for now 
-        r.log[0] = {term: appendReq.term, command: appendReq.entries[0]};
-    return {"currentTerm": r.currentTerm, "success": true};
-    } 
     
-    if ( !r.log[appendReq.lastLogIndex] || // entry not present
-       r.log[appendReq.lastLogIndex].term != appendReq.lastLogTerm) {
+    if ( !r.log[appendReq.prevLogIndex] || // entry not present
+       r.log[appendReq.prevLogIndex].term != appendReq.prevLogTerm) {
         return {"currentTerm": r.currentTerm, "success": false};
     }
+    r.log[appendReq.prevLogIndex] = {term: appendReq.term, command: appendReq.entries[0]};
     return {"currentTerm": r.currentTerm, "success": true};
     // TODO: Implement the rest 
 }
