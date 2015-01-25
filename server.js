@@ -29,12 +29,28 @@ http.createServer(function (req, res) {
         var body = "";
         req.on('data', function(chunk){body += chunk.toString();});
         req.on('end', function(){
-            res.writeHead(200, "OK", {'Content-Type': 'application/json'});
             var decoded = querystring.parse(body);
             if (paths[q.path] !== undefined) {
                 logger.debug("dispatching to handler: " + body);
                 res.writeHead(200, {'Content-Type': 'application/json'});
                 res.write(JSON.stringify(paths[q.path](r ,JSON.parse(body))));
+            }
+            else if (q.path == "/command") {
+                console.log("Got Command");
+                if (! r.leader) {
+                    res.writeHead(503);
+                    res.write("Service not available");
+                }
+                else if (r.leader == id) {
+                    console.log("execute");
+                    res.writeHead(200, {'Content-Type': 'application/json'});
+                }
+                else {
+                    var url = 'http://127.0.0.1:'+r.leader+ '/' + req.url;
+                    console.log("Redirect to " + url);
+                    res.statusCode = 302;
+                    res.setHeader('Location', url);
+                }
             }
             else {
                 res.writeHead(400, {'Content-Type': 'application/json'});
@@ -45,7 +61,7 @@ http.createServer(function (req, res) {
     else {
         logger.info(req);
         res.writeHead(200, {'Content-Type': 'text/plain'});
-        res.end('Hello World\n');
+        res.end(r.toString());
     }
  }).listen(id, '127.0.0.1');
 

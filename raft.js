@@ -60,8 +60,9 @@ function Raft(id, others, send) {
 Raft.prototype.toString = function() {
     return "[object Raft{id="+this.id+", curState="+this.curState+
                         ", currentTerm="+this.currentTerm + 
-                        ", currentLogTerm="+this.termOfLastLog()+ 
+                        ", termOfLastLog="+this.termOfLastLog()+ 
                         ", indexOfLastLog="+this.indexOfLastLog()+ 
+                        ", leader="+this.leader+ 
                         ", votedFor="+this.votedFor+"}]";
 };
 
