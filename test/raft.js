@@ -1,4 +1,5 @@
 var assert = require("assert");
+var chai = require("chai");
 var raft = require("../raft");
 
 describe('Raft.State', function() {
@@ -170,6 +171,19 @@ describe('Raft.handleAppendRequests', function() {
         var res = raft.handleAppendRequest(r, raft.appendEntryRequest(1, 1, 0,0,0,[]));
         assert.ok(!res.success);
         assert.equal(3, res.currentTerm);
+    });
+    it('Election timeout is not reset if message not from leader', function(){
+        r.leader = 1;
+        var t = r.timeOut;
+        var res = raft.handleAppendRequest(r, raft.appendEntryRequest(2, 1, 0,0,0,[]));
+        chai.assert.equal(t, r.timeout, "timers are not the same");
+    });
+    it('Election timeout is not reset if message is form previous term', function(){
+        r.leader = 1;
+        r.currentTerm = 2; 
+        var t = r.timeOut;
+        var res = raft.handleAppendRequest(r, raft.appendEntryRequest(1, 1, 0,0,0,[]));
+        assert.equal(t, r.timeout, "timers are not the same");
     });
     it('Reply false if log is missing entry at previous index', function() {
         r.currentTerm = 1;

@@ -81,6 +81,7 @@ function handleVoteRequest(r, voteReq) {
         // Grant Vote
         r.currentTerm = voteReq.term;
         r.votedFor = voteReq.candidateId;
+        // todo: Reset election timeout here
         return voteResponse(r.id, r.currentTerm, true);
     }
     return voteResponse(r.id, r.currentTerm, false);
@@ -90,10 +91,13 @@ function handleAppendRequest(r, appendReq) {
     logger.trace(r);
     logger.trace(appendReq);
     logger.trace("Clearing timeout");
-    newElectionTimeout(r);
     if (r.curState == states.candidate && 
        appendReq.term > r.currentTerm) {
        becomeFollower(r, appendReq.leaderId, appendReq.term);
+    }
+    if (r.currentTerm == appendReq.term && 
+        r.leader == appendReq.leaderId) {
+        newElectionTimeout(r);
     }
     if (r.currentTerm > appendReq.term) {
         logger.warn("term mismatch");
@@ -200,7 +204,7 @@ function becomeCandidate(r) {
 
 function newHeartbeatTimeout(r) {
     clearTimeout(r.timeout); 
-    r.timeout = setInterval(function() { 
+    r.timeout = setTimeout(function() { 
         // if check is probably not needed since
         // a state transition would cancle the timer and 
         // prevent the callback from firing. 
