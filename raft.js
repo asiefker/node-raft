@@ -74,30 +74,34 @@ function handleVoteRequest(r, voteReq) {
     logger.info(voteReq);
     logger.info(r.toString()); 
     if (voteReq.term < r.currentTerm) {
+        logger.info("false: old term");
         return voteResponse(r.id, r.currentTerm, false);
     } 
-    if ((voteReq.candidateId == r.votedFor || "" === r.votedFor) &&
+    if (("" === r.votedFor || // accept first candidate 
+         // only vote for 1 candidate per term, but support retries on requests. 
+         voteReq.candidateId == r.votedFor && voteReq.term == r.currentTerm ||  
+        // candidate is for a future term, accept that
+        voteReq.term > r.currentTerm) &&
+            // but no matter what, log has to be up to date 
        logIsUpToDate(r, voteReq.lastLogTerm, voteReq.lastLogIndex)){
         // Grant Vote
         r.currentTerm = voteReq.term;
         r.votedFor = voteReq.candidateId;
-        // todo: Reset election timeout here
+        newElectionTimeout(r);
+        logger.info("granted");
         return voteResponse(r.id, r.currentTerm, true);
     }
+    logger.trace("Default false.");
     return voteResponse(r.id, r.currentTerm, false);
 }
 
 function handleAppendRequest(r, appendReq) {
-    logger.trace(r);
     logger.trace(appendReq);
-    logger.trace("Clearing timeout");
-    if (r.curState == states.candidate && 
-       appendReq.term > r.currentTerm) {
-       becomeFollower(r, appendReq.leaderId, appendReq.term);
-    }
-    if (r.currentTerm == appendReq.term && 
-        r.leader == appendReq.leaderId) {
-        newElectionTimeout(r);
+    logger.trace(r.toString());
+    if ( appendReq.term >= r.currentTerm) {
+        // someone was elected leader without our vote (granted vote updates r.term)
+        // But they can't send appends without winning, so follow them. 
+        becomeFollower(r, appendReq.leaderId, appendReq.term);
     }
     if (r.currentTerm > appendReq.term) {
         logger.warn("term mismatch");
@@ -138,7 +142,6 @@ function handleAppendRequest(r, appendReq) {
 }
 
 function logIsUpToDate(r, lastLogTerm, lastLogIndex) {
-    assert.ok(lastLogTerm > 0);
     if (lastLogTerm == r.termOfLastLog()) {
         return lastLogIndex >= r.indexOfLastLog();
     }
@@ -150,10 +153,12 @@ function startElection(r) {
     becomeCandidate(r);
     r.votedFor = r.id;
     newElectionTimeout(r);    
-    voteReq = voteRequest(r.id, r.currentTerm, r.currentTerm, r.currentLogIndex);
+    voteReq = voteRequest(r.id, r.currentTerm, r.termOfLastLog(), r.indexOfLastLog());
     var grantedCount = 1;
     var electionTerm = r.currentTerm;
     r.send("/vote", voteReq, function(vRes) {
+        logger.info(r.toString());
+        logger.info(vRes);
         if (electionTerm == vRes.term && vRes.granted) {
             grantedCount +=1;
         } else if (vRes.term > r.currentTerm) {
@@ -181,6 +186,7 @@ function startElection(r) {
 function becomeLeader(r) {
     r.curState = states.leader;
     r.leader = r.id;
+    logger.info("Now leader: " + r);
     newHeartbeatTimeout(r);
     r.others.map(function(y){r.nextIndex[y]=r.indexOfLastLog()+1;});
     r.others.map(function(y){r.matchIndex[y]=0;});
@@ -188,16 +194,22 @@ function becomeLeader(r) {
 
 function becomeFollower(r, leader, newTerm) {
     r.curState = states.follower;
+    var oldLeader = r.leader;
     r.leader = leader;
     r.currentTerm = newTerm;
     r.nextIndex = {};
     r.matchIndex = {};
+    if (oldLeader != r.leader) {
+        // actually changed leaders, so log the event. 
+        logger.info("Now follower: " + r);
+    }
     newElectionTimeout(r);
 }
 
 function becomeCandidate(r) {
     r.curState = states.candidate;
     r.currentTerm += 1;
+    logger.info("Now candidate: " + r);
     r.nextIndex = {};
     r.matchIndex = {};
 }

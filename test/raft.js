@@ -7,13 +7,6 @@ describe('Raft.State', function() {
         beforeEach(function(){
             r = new raft.Raft();
         });
-
-        it('Term is always > 0', function() {
-            assert.throws(function(){
-                raft.logIsUpToDate(r, 0,0);        
-            });
-        });
-
         it('Reply false if term < currentTerm', function(){
             r.log.push({term:2, command:""});
             assert.ok(!raft.logIsUpToDate(r, 1, 0));    
@@ -52,8 +45,13 @@ describe('Raft.ElectionTimeout', function(){
 });
 
 describe('Raft.handleVoteRequest', function() {
-    it('Grant vote if not voted and candidate\'s term is >', function() {
+    beforeEach(function(){
         r = new raft.Raft(0, [], function(){});
+    });
+    afterEach(function(){
+        clearTimeout(r.timeout);
+    });
+    it('Grant vote if not voted and candidate\'s term is >', function() {
         res = raft.handleVoteRequest(r,  raft.voteRequest(1, 2, 1, 0));
         assert.ok(res.granted);
         assert.equal(2, res.term);
@@ -63,9 +61,13 @@ describe('Raft.handleVoteRequest', function() {
         res = raft.handleVoteRequest(r, raft.voteRequest(1, 2, 1, 0));
         assert.ok(res.granted);
         assert.equal(2, res.term);
+        // but on new term, grant vote
+        res = raft.handleVoteRequest(r, raft.voteRequest(2,3, 1, 0));
+        assert.ok(res.granted);
+        assert.equal(3, res.term);
+        assert.equal(2, r.votedFor);
     });
     it('Deny vote for older term', function() {
-        r = new raft.Raft(0, [], function(){});
         r.currentTerm = 10;
         res = raft.handleVoteRequest(r, raft.voteRequest(1, 2, 1, 0));
         assert.ok(!res.granted);
@@ -73,13 +75,19 @@ describe('Raft.handleVoteRequest', function() {
         assert.equal("", r.votedFor);
         
     });
-    it('Deny vote is candidate log is behind', function() {
-        r = new raft.Raft(0, [], function(){});
+    it('Deny vote if candidate log is behind', function() {
         r.currentTerm = 1;
         r.log.push({term: 1, command:""});
         res = raft.handleVoteRequest(r, raft.voteRequest(1, 2, 1, 0));
         assert.ok(!res.granted);
         assert.equal(1, res.term);
+    });
+    it('Deny vote if already voted for someone else this term', function(){
+        r.currentTerm = 1;
+        res = raft.handleVoteRequest(r, raft.voteRequest(1, 1, 1, 0));
+        assert.ok(res.granted);
+        res = raft.handleVoteRequest(r, raft.voteRequest(2, 1, 1, 0));
+        assert.ok(!res.granted);
     });
 });
 
@@ -130,6 +138,8 @@ describe('Raft.Election', function(){
         assert.equal("follower", r.curState);
         assert.equal("", r.votedFor);
         assert.equal(2, r.currentTerm);
+        // also implies that he lost election:
+        assert.equal(2, r.leader);
     });
     it('Become follower if heartbeat received during election', function() {
         r= new raft.Raft(0, [1,2,4,5], function(n, d, e, a) {
@@ -151,11 +161,12 @@ describe('Raft.Election', function(){
             e(raft.voteResponse(2, d.term, true));
             a();
         });
+        r.currentTerm=1;
         raft.startElection(r);
         assert.equal("leader", r.curState);
         assert.equal(0, r.leader);
         assert.equal("", r.votedFor);
-        assert.equal(1, r.currentTerm);
+        assert.equal(2, r.currentTerm);
     });
 });
 
@@ -168,14 +179,10 @@ describe('Raft.handleAppendRequests', function() {
     });
     it('Reply false if term < currentTerm', function() {
         r.currentTerm = 3;
+        var t = r.timeOut;
         var res = raft.handleAppendRequest(r, raft.appendEntryRequest(1, 1, 0,0,0,[]));
         assert.ok(!res.success);
         assert.equal(3, res.currentTerm);
-    });
-    it('Election timeout is not reset if message not from leader', function(){
-        r.leader = 1;
-        var t = r.timeOut;
-        var res = raft.handleAppendRequest(r, raft.appendEntryRequest(2, 1, 0,0,0,[]));
         chai.assert.equal(t, r.timeout, "timers are not the same");
     });
     it('Election timeout is not reset if message is form previous term', function(){
@@ -183,7 +190,7 @@ describe('Raft.handleAppendRequests', function() {
         r.currentTerm = 2; 
         var t = r.timeOut;
         var res = raft.handleAppendRequest(r, raft.appendEntryRequest(1, 1, 0,0,0,[]));
-        assert.equal(t, r.timeout, "timers are not the same");
+        chai.assert.equal(t, r.timeout, "timers are not the same");
     });
     it('Reply false if log is missing entry at previous index', function() {
         r.currentTerm = 1;

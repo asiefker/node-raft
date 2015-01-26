@@ -59,7 +59,6 @@ http.createServer(function (req, res) {
         });
     }
     else {
-        logger.info(req);
         res.writeHead(200, {'Content-Type': 'text/plain'});
         res.end(r.toString());
     }
