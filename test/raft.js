@@ -265,3 +265,25 @@ describe('Raft.handleAppendRequests', function() {
         assert.equal(3, r.commitIndex);
     });
 });
+describe('Raft.sendAppendEntry', function() {
+    beforeEach(function(){
+    });
+    afterEach(function(){
+        clearTimeout(r.timeout);
+    });
+    it("Leader sends heartbeat", function(done) {
+        var count = 0;
+        r= new raft.Raft(0, [1,2,3,4], function() {}, function(id, path, req, cb) {
+            count++;
+            assert.deepEqual(raft.appendEntryRequest(0,0,0,0,0,[]), req);
+            if (count == 4) {
+                done();
+            }
+            return {"currentTerm": 0, "success": true};
+        });
+        raft.becomeLeader(r);
+        raft.sendAppendEntry(r);
+    });
+});    
+
+

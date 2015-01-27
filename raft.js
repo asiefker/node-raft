@@ -1,6 +1,6 @@
 var assert = require("assert");
+var async = require("async");
 var log4js = require('log4js');
-
 var logger = log4js.getLogger();
 logger.setLevel('INFO');
 
@@ -10,8 +10,8 @@ function appendEntryRequest(id, currentTerm, prevLogTerm, prevLogIndex,
         leaderId: id, 
         prevLogIndex: prevLogIndex, 
         prevLogTerm: prevLogTerm, 
-        entries: entries, 
-        leaderCommitIndex:commitIndex};
+        leaderCommitIndex:commitIndex,
+        entries: entries};
 }
 
 function voteResponse(id, term, granted) {
@@ -37,14 +37,15 @@ function voteRequest(candidate, currentTerm, lastLogTerm, lastLogIndex) {
  * @param send {function} - callback that takes 4 parameters: 
  *      name, map for the request, per success callback, completion callback
  */
-function Raft(id, others, send) {
+function Raft(id, others, sendAll, sendOne) {
     // Raft server states
     this.id = id;
     this.curState= states.follower;
     this.currentTerm = 0;
     this.votedFor = "";
     this.others = others;
-    this.send = send;
+    this.send = sendAll;
+    this.sendOne = sendOne;
     this.log = [{term: 0}];
     this.commitIndex = 0;
     this.lastApplied = 0;
@@ -139,6 +140,20 @@ function handleAppendRequest(r, appendReq) {
         // TODO: Trigger apply calls. Maybe with events?  
     }
     return {"currentTerm": r.currentTerm, "success": true};
+}
+
+function handleCommand(r, c) {
+    asset.equal(e.id == r.leader); // should be handle by caller but make sure
+    r.log.push({term: r.curTerm, command: c});
+    sendAppendEntry(r);
+    if(success >= r.others.length/2) {
+        // TODO: apply to state machine
+        return true;
+    }
+    else {
+        // TODO trigger error back to client
+        return false;
+    }
 }
 
 function logIsUpToDate(r, lastLogTerm, lastLogIndex) {
@@ -236,12 +251,38 @@ function newElectionTimeout(r) {
     1000 + Math.floor(Math.random() * 2000));
 }
     
-// todo imple
+// TODO imple
 // add tests
 function sendAppendEntry(r) {
     append = appendEntryRequest(r.id, r.currentTerm, 
-        r.termOfLastLog(), r.indexOfLastLog(), r.commitIndex, []); 
-    r.send("/append", append, function(a){}, function(){});
+        r.termOfLastLog(), r.indexOfLastLog(), r.commitIndex, []);
+    async.each(r.others, function(o, cb){
+        r.sendOne(r.id, "/append", append, function(r){});
+    });
+//    // send to all
+//    var succeess = 0;
+//    var toSend = r.others.map(function(x){
+//        if (r.nextIndex[x]<r.log.length) {
+//            return function() {
+//                // todo add batch support here
+//                r.sendOne(x, '/append', appendEntryRequest(r.id, r.curTerm, r.termOfLastLog,
+//                                                  r.indexOfLastLog, r.commitIndex, 
+//                                                  r.log[r.nextIndex[x]]),
+//                    function(resp){
+//                        if (resp.success) {
+//                            r.nextIndex[x] +=1;
+//                            success += 1;
+//                        }
+//                        else {
+//                            // todo leverage term optimization here
+//                            r.nextIndex[x] -=1;
+//                        }
+//                    });
+//            };
+//        }
+//    });
+//    // todo figure out how to terminate early
+//    async.parallel(toSend, function(){ });
 }
 
 // Possible states of the raft server
@@ -256,6 +297,10 @@ exports.voteRequest = voteRequest;
 exports.voteResponse = voteResponse;
 exports.startElection = startElection;
 exports.logIsUpToDate = logIsUpToDate; 
-exports.handleVoteRequest = handleVoteRequest; 
 exports.handleAppendRequest = handleAppendRequest;
+exports.handleCommand = handleCommand;
+exports.handleVoteRequest = handleVoteRequest; 
 exports.Raft = Raft;
+// exposed for testing only.  
+exports.becomeLeader= becomeLeader; 
+exports.sendAppendEntry= sendAppendEntry;

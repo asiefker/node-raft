@@ -79,7 +79,7 @@ function sendAll(path, jsonBody, eachCB, finalCB) {
             if (err) {
                 logger.trace(endpoint + "failed to respond: " + err);
             } else {
-                eachCB(resp.body);
+                eachCB(resp.body, port);
             }
             callback();
         });
