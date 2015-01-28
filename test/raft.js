@@ -272,17 +272,22 @@ describe('Raft.sendAppendEntry', function() {
         clearTimeout(r.timeout);
     });
     it("Leader sends heartbeat", function(done) {
+        this.timeout(1000);
         var count = 0;
         r= new raft.Raft(0, [1,2,3,4], function() {}, function(id, path, req, cb) {
             count++;
-            assert.deepEqual(raft.appendEntryRequest(0,0,0,0,0,[]), req);
+            assert.equal(0, req.leaderId);
+            assert.equal(0, req.term);
+            assert.equal(0, req.entries.length);
+            assert.equal(0, req.prevLogIndex);
+            assert.equal(0, req.prevLogTerm);
+            assert.equal(0, req.leaderCommitIndex);
             if (count == 4) {
                 done();
             }
             return {"currentTerm": 0, "success": true};
         });
         raft.becomeLeader(r);
-        raft.sendAppendEntry(r);
     });
 });    
 

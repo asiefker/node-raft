@@ -143,7 +143,8 @@ function handleAppendRequest(r, appendReq) {
 }
 
 function handleCommand(r, c) {
-    asset.equal(e.id == r.leader); // should be handle by caller but make sure
+    // should be handle by caller but make sure
+    assert.equal(r.curState,  states.leader); 
     r.log.push({term: r.curTerm, command: c});
     sendAppendEntry(r);
     if(success >= r.others.length/2) {
@@ -203,7 +204,7 @@ function becomeLeader(r) {
     r.leader = r.id;
     logger.info("Now leader: " + r);
     newHeartbeatTimeout(r);
-    r.others.map(function(y){r.nextIndex[y]=r.indexOfLastLog()+1;});
+    r.others.map(function(y){r.nextIndex[y]=r.indexOfLastLog();});
     r.others.map(function(y){r.matchIndex[y]=0;});
 }
 
@@ -254,9 +255,14 @@ function newElectionTimeout(r) {
 // TODO imple
 // add tests
 function sendAppendEntry(r) {
-    append = appendEntryRequest(r.id, r.currentTerm, 
-        r.termOfLastLog(), r.indexOfLastLog(), r.commitIndex, []);
     async.each(r.others, function(o, cb){
+        logger.info(o);
+        logger.info(r.nextIndex);
+        logger.info(r.nextIndex[o]);
+        otherLastLogIndex = r.nextIndex[o];
+        append = appendEntryRequest(r.id, r.currentTerm, 
+            r.log[otherLastLogIndex].term, otherLastLogIndex, r.commitIndex, 
+           r.log.slice(otherLastLogIndex + 1)); // todo, put a limit in here for catch up
         r.sendOne(r.id, "/append", append, function(r){});
     });
 //    // send to all
