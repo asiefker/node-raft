@@ -150,13 +150,10 @@ function handleCommand(r, c) {
     r.log.push({term: r.curTerm, command: c});
     var indexOfLastLog = r.indexOfLastLog();
     sendAppendEntry(r);
-    var count=0;
-    for (var id in r.nextIndex) {
-        if(r.nextIndex[id]>= indexOfLastLog) { // TODO: this should handle the case
-                                                // of out of order messages
-            count++;
-        }
-    }
+    var count = Object.keys(r.nextIndex).filter(function(x){
+         // TODO: this should handle the case of out of order messages
+        return r.nextIndex[x]>= indexOfLastLog;
+    }).length;
     if(count >= r.others.length/2) {
         // TODO: apply to state machine
         return true;

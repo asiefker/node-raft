@@ -307,7 +307,7 @@ describe('Raft.sendAppendEntry', function() {
         raft.becomeLeader(r);
         clearTimeout(r.timeout);
         assert.ok(raft.handleCommand(r, "{}"));
-        r.others.map(function(i){
+        r.others.forEach(function(i){
             assert.equal(1, r.nextIndex[i]);
         });
     });
