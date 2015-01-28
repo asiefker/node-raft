@@ -267,12 +267,12 @@ describe('Raft.handleAppendRequests', function() {
 });
 describe('Raft.sendAppendEntry', function() {
     beforeEach(function(){
+        this.timeout(1000);
     });
     afterEach(function(){
         clearTimeout(r.timeout);
     });
     it("Leader sends heartbeat", function(done) {
-        this.timeout(1000);
         var count = 0;
         r= new raft.Raft(0, [1,2,3,4], function() {}, function(id, path, req, cb) {
             count++;
@@ -285,9 +285,33 @@ describe('Raft.sendAppendEntry', function() {
             if (count == 4) {
                 done();
             }
-            return {"currentTerm": 0, "success": true};
+            cb({"currentTerm": 0, "success": true});
         });
         raft.becomeLeader(r);
+    });
+    it('handleCommand, all succes', function(done){
+        var count = 0;
+        r= new raft.Raft(0, [1,2], function() {}, function(id, path, req, cb) {
+            count++;
+            assert.equal(0, req.leaderId);
+            assert.equal(0, req.term);
+            assert.equal(1, req.entries.length);
+            assert.equal(0, req.prevLogIndex);
+            assert.equal(0, req.prevLogTerm);
+            assert.equal(0, req.leaderCommitIndex);
+            if (count == 2) {
+                done();
+            }
+            cb({"currentTerm": 0, "success": true});
+        });
+        raft.becomeLeader(r);
+        clearTimeout(r.timeout);
+        assert.ok(raft.handleCommand(r, "{}"));
+        r.others.map(function(i){
+            assert.equal(1, r.nextIndex[i]);
+        });
+    });
+    it('HandleCommand, single failure, majority success', function(done){
     });
 });    
 

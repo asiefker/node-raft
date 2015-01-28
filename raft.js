@@ -49,12 +49,14 @@ function Raft(id, others, sendAll, sendOne) {
     this.log = [{term: 0}];
     this.commitIndex = 0;
     this.lastApplied = 0;
+    // TODO: These 2 functions might go away
     this.indexOfLastLog = function() {
         return this.log.length - 1; 
     };
     this.termOfLastLog = function () {
         return this.log[this.log.length-1].term;
     };
+    // TODO: rename? Matches paper, but thinking in terms of last good index is easier
     this.nextIndex = {};
     this.matchIndex = {};
 }
@@ -146,8 +148,16 @@ function handleCommand(r, c) {
     // should be handle by caller but make sure
     assert.equal(r.curState,  states.leader); 
     r.log.push({term: r.curTerm, command: c});
+    var indexOfLastLog = r.indexOfLastLog();
     sendAppendEntry(r);
-    if(success >= r.others.length/2) {
+    var count=0;
+    for (var id in r.nextIndex) {
+        if(r.nextIndex[id]>= indexOfLastLog) { // TODO: this should handle the case
+                                                // of out of order messages
+            count++;
+        }
+    }
+    if(count >= r.others.length/2) {
         // TODO: apply to state machine
         return true;
     }
@@ -255,15 +265,20 @@ function newElectionTimeout(r) {
 // TODO imple
 // add tests
 function sendAppendEntry(r) {
+    // save off the index for the callbacks. 
+    var indexOfLastLog = r.indexOfLastLog();
     async.each(r.others, function(o, cb){
-        logger.info(o);
-        logger.info(r.nextIndex);
-        logger.info(r.nextIndex[o]);
         otherLastLogIndex = r.nextIndex[o];
         append = appendEntryRequest(r.id, r.currentTerm, 
             r.log[otherLastLogIndex].term, otherLastLogIndex, r.commitIndex, 
            r.log.slice(otherLastLogIndex + 1)); // todo, put a limit in here for catch up
-        r.sendOne(r.id, "/append", append, function(r){});
+        r.sendOne(r.id, "/append", append, function(resp){
+            if (resp.success) {
+                // TODO: Add out of order return values (early advances index farther
+                // TODO: Add test case for failure
+                r.nextIndex[o] = indexOfLastLog;
+            }
+        });
     });
 //    // send to all
 //    var succeess = 0;
