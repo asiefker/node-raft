@@ -34,10 +34,15 @@ function voteRequest(candidate, currentTerm, lastLogTerm, lastLogIndex) {
  * Create a Raft instance
  * @param id - the id of this instance
  * @param others {array} - ids of the other Raft instances
- * @param send {function} - callback that takes 4 parameters: 
+ * @param sendAll {function} - callback that takes 4 parameters: 
  *      name, map for the request, per success callback, completion callback
+ *      request will be sent to the rest of the fleet
+ * @param sendOne {function} - callback that takes 4 parameters:
+ *      id, name, map for the request, success callback
+ * @param apply {function} - callback to update the state machine after the 
+ *      command has been replicated. Takes 1 parameter, the comand
  */
-function Raft(id, others, sendAll, sendOne) {
+function Raft(id, others, sendAll, sendOne, apply) {
     // Raft server states
     this.id = id;
     this.curState= states.follower;
@@ -46,6 +51,7 @@ function Raft(id, others, sendAll, sendOne) {
     this.others = others;
     this.send = sendAll;
     this.sendOne = sendOne;
+    this.apply = apply;
     this.log = [{term: 0}];
     this.commitIndex = 0;
     this.lastApplied = 0;
@@ -155,7 +161,7 @@ function handleCommand(r, c) {
         return r.nextIndex[x]>= indexOfLastLog;
     }).length;
     if(count >= r.others.length/2) {
-        // TODO: apply to state machine
+        r.apply(c);
         return true;
     }
     else {
@@ -259,48 +265,23 @@ function newElectionTimeout(r) {
     1000 + Math.floor(Math.random() * 2000));
 }
     
-// TODO imple
-// add tests
 function sendAppendEntry(r) {
     // save off the index for the callbacks. 
     var indexOfLastLog = r.indexOfLastLog();
     async.each(r.others, function(o, cb){
-        otherLastLogIndex = r.nextIndex[o];
+        var otherLastLogIndex = r.nextIndex[o];
         append = appendEntryRequest(r.id, r.currentTerm, 
             r.log[otherLastLogIndex].term, otherLastLogIndex, r.commitIndex, 
            r.log.slice(otherLastLogIndex + 1)); // todo, put a limit in here for catch up
-        r.sendOne(r.id, "/append", append, function(resp){
+        r.sendOne(o, "/append", append, function(resp){
             if (resp.success) {
                 // TODO: Add out of order return values (early advances index farther
                 // TODO: Add test case for failure
                 r.nextIndex[o] = indexOfLastLog;
+                r.matchIndex[o] = indexOfLastLog;
             }
         });
     });
-//    // send to all
-//    var succeess = 0;
-//    var toSend = r.others.map(function(x){
-//        if (r.nextIndex[x]<r.log.length) {
-//            return function() {
-//                // todo add batch support here
-//                r.sendOne(x, '/append', appendEntryRequest(r.id, r.curTerm, r.termOfLastLog,
-//                                                  r.indexOfLastLog, r.commitIndex, 
-//                                                  r.log[r.nextIndex[x]]),
-//                    function(resp){
-//                        if (resp.success) {
-//                            r.nextIndex[x] +=1;
-//                            success += 1;
-//                        }
-//                        else {
-//                            // todo leverage term optimization here
-//                            r.nextIndex[x] -=1;
-//                        }
-//                    });
-//            };
-//        }
-//    });
-//    // todo figure out how to terminate early
-//    async.parallel(toSend, function(){ });
 }
 
 // Possible states of the raft server

@@ -290,28 +290,39 @@ describe('Raft.sendAppendEntry', function() {
         raft.becomeLeader(r);
     });
     it('handleCommand, all succes', function(done){
-        var count = 0;
         r= new raft.Raft(0, [1,2], function() {}, function(id, path, req, cb) {
-            count++;
             assert.equal(0, req.leaderId);
             assert.equal(0, req.term);
             assert.equal(1, req.entries.length);
             assert.equal(0, req.prevLogIndex);
             assert.equal(0, req.prevLogTerm);
             assert.equal(0, req.leaderCommitIndex);
-            if (count == 2) {
-                done();
-            }
             cb({"currentTerm": 0, "success": true});
+        }, function(c){
+            assert.equal("{}", c);
+            done(); // works as assert
         });
         raft.becomeLeader(r);
         clearTimeout(r.timeout);
         assert.ok(raft.handleCommand(r, "{}"));
         r.others.forEach(function(i){
             assert.equal(1, r.nextIndex[i]);
+            assert.equal(1, r.matchIndex[i]);
         });
     });
     it('HandleCommand, single failure, majority success', function(done){
+        r= new raft.Raft(0, [1,2], function() {}, function(id, path, req, cb) {
+            if (id == 1) {
+                cb({"currentTerm": 0, "success": false});
+            } else {
+                cb({"currentTerm": 0, "success": true});
+            }
+        }, function(c){done();});
+        raft.becomeLeader(r);
+        clearTimeout(r.timeout);
+        assert.ok(raft.handleCommand(r, "{}"));
+        assert.equal(0, r.nextIndex[1]);
+        assert.equal(1, r.nextIndex[2]);
     });
 });    
 
