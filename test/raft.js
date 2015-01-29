@@ -309,6 +309,8 @@ describe('Raft.sendAppendEntry', function() {
             assert.equal(1, r.nextIndex[i]);
             assert.equal(1, r.matchIndex[i]);
         });
+        assert.equal(1, r.commitIndex);
+        assert.equal(1, r.lastApplied);
     });
     it('HandleCommand, single failure, majority success', function(done){
         r= new raft.Raft(0, [1,2], function() {}, function(id, path, req, cb) {
@@ -323,7 +325,44 @@ describe('Raft.sendAppendEntry', function() {
         assert.ok(raft.handleCommand(r, "{}"));
         assert.equal(0, r.nextIndex[1]);
         assert.equal(1, r.nextIndex[2]);
+        assert.equal(1, r.commitIndex);
+        assert.equal(1, r.lastApplied);
     });
+    it('HandleCommand, apply only if lastApplied<commitIndex', function(done){
+        // If we pipeline multiple handles() it might be possible for a later 
+        // accept to come back first. If success==true, then the earlier message
+        // has been applied, but we need to make sure next/matchIndex is updated correctly
+        // as well as the sm commands applied in correct order. 
+        var called = false;
+        var doneCount = 0;
+        var applied = [];
+        var second = "{'a': 1}";
+        var results = [false, false, true, true];
+        r= new raft.Raft(0, [1,2], function() {}, function(id, path, req, cb) {
+            if (!called) {
+                called=true;
+                raft.handleCommand(r, second);
+            }
+            cb({"currentTerm": 0, "success": results.pop()}); // logIsUpToDate would be false 
+        }, function(c){
+            applied.push(c);
+            doneCount++;
+            if (doneCount ==2) {
+                done();
+            }
+        });
+        raft.becomeLeader(r);
+        clearTimeout(r.timeout);
+        assert.ok(raft.handleCommand(r, "{}"));
+        assert.ok(2, doneCount);
+        assert.equal(2, r.nextIndex[1]);
+        assert.equal(2, r.matchIndex[1]);
+        assert.equal(2, r.nextIndex[2]);
+        assert.equal("{}", applied[0]);
+        assert.equal(second, applied[1]);
+    
+    });
+
 });    
 
 

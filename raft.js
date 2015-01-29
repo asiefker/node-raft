@@ -154,20 +154,13 @@ function handleCommand(r, c) {
     // should be handle by caller but make sure
     assert.equal(r.curState,  states.leader); 
     r.log.push({term: r.curTerm, command: c});
-    var indexOfLastLog = r.indexOfLastLog();
     sendAppendEntry(r);
-    var count = Object.keys(r.nextIndex).filter(function(x){
-         // TODO: this should handle the case of out of order messages
-        return r.nextIndex[x]>= indexOfLastLog;
-    }).length;
-    if(count >= r.others.length/2) {
-        r.apply(c);
-        return true;
+    while (r.lastApplied < r.commitIndex) {
+        r.lastApplied++;
+        r.apply(r.log[r.lastApplied].command);
     }
-    else {
-        // TODO trigger error back to client
-        return false;
-    }
+    // TODO trigger error back to client
+    return true;
 }
 
 function logIsUpToDate(r, lastLogTerm, lastLogIndex) {
@@ -275,13 +268,27 @@ function sendAppendEntry(r) {
            r.log.slice(otherLastLogIndex + 1)); // todo, put a limit in here for catch up
         r.sendOne(o, "/append", append, function(resp){
             if (resp.success) {
-                // TODO: Add out of order return values (early advances index farther
-                // TODO: Add test case for failure
-                r.nextIndex[o] = indexOfLastLog;
-                r.matchIndex[o] = indexOfLastLog;
+                // max deals with out of order return statements.  
+                r.nextIndex[o] = Math.max(indexOfLastLog, r.nextIndex[o]);
+                r.matchIndex[o] = Math.max(indexOfLastLog, r.matchIndex[o]);
             }
         });
     });
+    p = function(x) { return r.nextIndex[x]>= r.commitIndex+1;};
+    while(hasMajority(p)){
+        r.commitIndex++;
+    }
+}
+
+/**
+ * Returns true if a majority agree with f. 
+ * @param {function} f a predicate 
+ * @return {boolean} true if more than half of others evaluate f to true. 
+ * Implicitly, it assumes that "this" instance agrees. 
+ */
+function hasMajority(f){
+    var count = r.others.filter(f).length;
+    return count+1>(r.others.length/2);
 }
 
 // Possible states of the raft server
