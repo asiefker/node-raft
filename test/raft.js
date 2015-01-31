@@ -264,6 +264,27 @@ describe('Raft.handleAppendRequests', function() {
         assert.ok(res.success);
         assert.equal(3, r.commitIndex);
     });
+    it('Append of previous log entry does not corrupt the log', function(){
+        r.currentTerm = 1;
+        toAppend = [];
+        for (i=0; i<5; i++) {
+            toAppend.push({term:1, command:i});
+        }
+        var res = raft.handleAppendRequest(r, raft.appendEntryRequest(1, 1, 0,0,0,toAppend));
+        assert.ok(res.success);
+        assert.ok(6, r.log.length);
+        // resend the 1st command
+        res = raft.handleAppendRequest(r, raft.appendEntryRequest(1, 1, 0,0,0,toAppend[0]));
+        assert.ok(6, r.log.length);
+        assert.ok(res.success);
+        chai.assert.deepEqual(toAppend, r.log.slice(1));
+
+        // resend the 3 command
+        res = raft.handleAppendRequest(r, raft.appendEntryRequest(1, 1, 1,3,0,toAppend[3]));
+        assert.ok(6, r.log.length);
+        assert.ok(res.success);
+        chai.assert.deepEqual(toAppend, r.log.slice(1));
+    });
 });
 describe('Raft.sendAppendEntry', function() {
     beforeEach(function(){
@@ -323,7 +344,7 @@ describe('Raft.sendAppendEntry', function() {
         raft.becomeLeader(r);
         clearTimeout(r.timeout);
         assert.ok(raft.handleCommand(r, "{}"));
-        assert.equal(0, r.nextIndex[1]);
+        assert.equal(-1, r.nextIndex[1]);
         assert.equal(1, r.nextIndex[2]);
         assert.equal(1, r.commitIndex);
         assert.equal(1, r.lastApplied);
@@ -337,13 +358,13 @@ describe('Raft.sendAppendEntry', function() {
         var doneCount = 0;
         var applied = [];
         var second = "{'a': 1}";
-        var results = [false, false, true, true];
         r= new raft.Raft(0, [1,2], function() {}, function(id, path, req, cb) {
             if (!called) {
                 called=true;
                 raft.handleCommand(r, second);
             }
-            cb({"currentTerm": 0, "success": results.pop()}); // logIsUpToDate would be false 
+            // appendEntry returns succes and doesn't modify the log. 
+            cb({"currentTerm": 0, "success": true}); 
         }, function(c){
             applied.push(c);
             doneCount++;
@@ -362,7 +383,6 @@ describe('Raft.sendAppendEntry', function() {
         assert.equal(second, applied[1]);
     
     });
-
 });    
 
 

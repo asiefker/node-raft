@@ -153,13 +153,12 @@ function handleAppendRequest(r, appendReq) {
 function handleCommand(r, c) {
     // should be handle by caller but make sure
     assert.equal(r.curState,  states.leader); 
-    r.log.push({term: r.curTerm, command: c});
+    r.log.push({term: r.currentTerm, command: c});
     sendAppendEntry(r);
     while (r.lastApplied < r.commitIndex) {
         r.lastApplied++;
         r.apply(r.log[r.lastApplied].command);
     }
-    // TODO trigger error back to client
     return true;
 }
 
@@ -259,22 +258,32 @@ function newElectionTimeout(r) {
 }
     
 function sendAppendEntry(r) {
-    // save off the index for the callbacks. 
-    var indexOfLastLog = r.indexOfLastLog();
     async.each(r.others, function(o, cb){
+        // save off the index for the callbacks. 
+        var indexOfLastLog = r.indexOfLastLog();
         var otherLastLogIndex = r.nextIndex[o];
         append = appendEntryRequest(r.id, r.currentTerm, 
             r.log[otherLastLogIndex].term, otherLastLogIndex, r.commitIndex, 
            r.log.slice(otherLastLogIndex + 1)); // todo, put a limit in here for catch up
         r.sendOne(o, "/append", append, function(resp){
+            logger.info("Other "+ o + " lastIndex: "  + otherLastLogIndex);
             if (resp.success) {
                 // max deals with out of order return statements.  
                 r.nextIndex[o] = Math.max(indexOfLastLog, r.nextIndex[o]);
                 r.matchIndex[o] = Math.max(indexOfLastLog, r.matchIndex[o]);
+            } else if (otherLastLogIndex == r.nextIndex[o]) {
+                // on failure, decrement to trigger resend, but only if
+                // we have not accepted newer messages from this other.
+                logger.info(JSON.stringify(r.nextIndex));
+                r.nextIndex[o] = r.nextIndex[o]-1; 
+                logger.info(JSON.stringify(r.nextIndex));
             }
+            logger.info("After Other "+ o + JSON.stringify(r.nextIndex)); 
         });
     });
-    p = function(x) { return r.nextIndex[x]>= r.commitIndex+1;};
+    p = function(x) { 
+        return r.nextIndex[x]>= r.commitIndex+1 && 
+                            r.log[r.commitIndex+1].term == r.currentTerm;};
     while(hasMajority(p)){
         r.commitIndex++;
     }
