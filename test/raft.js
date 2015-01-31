@@ -255,7 +255,13 @@ describe('Raft.handleAppendRequests', function() {
         assert.ok(res.success);
         assert.equal(4, r.log.length);
     });
-    it("Heartbeat advances commit index", function(){
+    it("Heartbeat advances commit index and applies logs", function(){
+        var commands = [];
+        r= new raft.Raft(0, [1,2,3,4], function(n, d, e, a) {}, 
+                        function(){}, 
+                        function(c) {
+                            commands.push(c);
+                        });
         r.currentTerm = 1;
         for (i=0; i<5; i++) {
             r.log.push({term:1, command:""});
@@ -263,6 +269,8 @@ describe('Raft.handleAppendRequests', function() {
         var res = raft.handleAppendRequest(r, raft.appendEntryRequest(1, 1, 1,5,3,[]));
         assert.ok(res.success);
         assert.equal(3, r.commitIndex);
+        assert.equal(3, r.lastApplied);
+        assert.equal(3, commands.length);
     });
     it('Append of previous log entry does not corrupt the log', function(){
         r.currentTerm = 1;

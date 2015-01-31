@@ -17,7 +17,7 @@ for (var i=process.argv[3]; i<=process.argv[4]; i++) {
     if (id == i) continue;
     others.push(i);
 }
-var r = new raft.Raft(id, others, sendAll);
+var r = new raft.Raft(id, others, sendAll, sendOne, apply);
 logger.info("Others: " + others);
 paths = {"/vote": raft.handleVoteRequest,
          "/append": raft.handleAppendRequest
@@ -43,7 +43,9 @@ http.createServer(function (req, res) {
                 }
                 else if (r.leader == id) {
                     console.log("execute");
+                    raft.handleCommand(r, body);
                     res.writeHead(200, {'Content-Type': 'application/json'});
+                    res.end(JSON.stringify(state));
                 }
                 else {
                     var url = 'http://127.0.0.1:'+r.leader+ '/' + req.url;
@@ -60,7 +62,7 @@ http.createServer(function (req, res) {
     }
     else {
         res.writeHead(200, {'Content-Type': 'text/plain'});
-        res.end(r.toString());
+        res.end(r.toString()+ "\n" + JSON.stringify(state));
     }
  }).listen(id, '127.0.0.1');
 
@@ -86,3 +88,22 @@ function sendAll(path, jsonBody, eachCB, finalCB) {
     }, finalCB);
 }
 
+// TODO: Refactor this to share with sendAll, thought the async callback is tricky 
+function sendOne(port, path, jsonBody, cb) {
+    var endpoint = "http://localhost:"+port+path;
+    needle.post(endpoint, jsonBody, {'json': 'true', 'timeout': 200}, function(err, resp){
+        if (err) {
+            logger.trace(endpoint + "failed to respond: " + err);
+        } else {
+            cb(resp.body, port);
+        }
+    });
+}
+
+state = {};
+function apply(c) {
+    var json = JSON.parse(c);
+    for (var x in json) {
+        state[x] = json[x];
+    }
+}

@@ -145,7 +145,7 @@ function handleAppendRequest(r, appendReq) {
     }
     if (appendReq.leaderCommitIndex > r.commitIndex) {
         r.commitIndex = Math.min(appendReq.leaderCommitIndex, r.log.length-1);
-        // TODO: Trigger apply calls. Maybe with events?  
+        applyCommittedLogs(r);
     }
     return {"currentTerm": r.currentTerm, "success": true};
 }
@@ -155,11 +155,20 @@ function handleCommand(r, c) {
     assert.equal(r.curState,  states.leader); 
     r.log.push({term: r.currentTerm, command: c});
     sendAppendEntry(r);
+    applyCommittedLogs(r);
+    return true;
+}
+
+/**
+ * If commit index is ahead of lastApplied, 
+ * call Raft.apply() with the unapplied changes
+ * @param r {Raft}
+ */
+function applyCommittedLogs(r) { 
     while (r.lastApplied < r.commitIndex) {
         r.lastApplied++;
         r.apply(r.log[r.lastApplied].command);
     }
-    return true;
 }
 
 function logIsUpToDate(r, lastLogTerm, lastLogIndex) {
@@ -177,7 +186,7 @@ function startElection(r) {
     voteReq = voteRequest(r.id, r.currentTerm, r.termOfLastLog(), r.indexOfLastLog());
     var grantedCount = 1;
     var electionTerm = r.currentTerm;
-    r.send("/vote", voteReq, function(vRes) {
+    r.send("/vote", voteReq, function(vRes, p) {
         logger.info(r.toString());
         logger.info(vRes);
         if (electionTerm == vRes.term && vRes.granted) {
@@ -266,7 +275,6 @@ function sendAppendEntry(r) {
             r.log[otherLastLogIndex].term, otherLastLogIndex, r.commitIndex, 
            r.log.slice(otherLastLogIndex + 1)); // todo, put a limit in here for catch up
         r.sendOne(o, "/append", append, function(resp){
-            logger.info("Other "+ o + " lastIndex: "  + otherLastLogIndex);
             if (resp.success) {
                 // max deals with out of order return statements.  
                 r.nextIndex[o] = Math.max(indexOfLastLog, r.nextIndex[o]);
@@ -274,17 +282,14 @@ function sendAppendEntry(r) {
             } else if (otherLastLogIndex == r.nextIndex[o]) {
                 // on failure, decrement to trigger resend, but only if
                 // we have not accepted newer messages from this other.
-                logger.info(JSON.stringify(r.nextIndex));
                 r.nextIndex[o] = r.nextIndex[o]-1; 
-                logger.info(JSON.stringify(r.nextIndex));
             }
-            logger.info("After Other "+ o + JSON.stringify(r.nextIndex)); 
         });
     });
     p = function(x) { 
         return r.nextIndex[x]>= r.commitIndex+1 && 
                             r.log[r.commitIndex+1].term == r.currentTerm;};
-    while(hasMajority(p)){
+    while(hasMajority(r, p)){
         r.commitIndex++;
     }
 }
@@ -295,7 +300,7 @@ function sendAppendEntry(r) {
  * @return {boolean} true if more than half of others evaluate f to true. 
  * Implicitly, it assumes that "this" instance agrees. 
  */
-function hasMajority(f){
+function hasMajority(r, f){
     var count = r.others.filter(f).length;
     return count+1>(r.others.length/2);
 }
