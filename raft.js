@@ -72,7 +72,9 @@ Raft.prototype.toString = function() {
                         ", termOfLastLog="+this.termOfLastLog()+ 
                         ", indexOfLastLog="+this.indexOfLastLog()+ 
                         ", leader="+this.leader+ 
-                        ", votedFor="+this.votedFor+"}]";
+                        ", votedFor="+this.votedFor+
+                        ", commitIndex="+this.commitIndex + 
+                        ", lastApplied=" + this.lastApplied+"}]";
 };
 
 exports.start = function(r) {
@@ -155,7 +157,6 @@ function handleCommand(r, c) {
     assert.equal(r.curState,  states.leader); 
     r.log.push({term: r.currentTerm, command: c});
     sendAppendEntry(r);
-    applyCommittedLogs(r);
     return true;
 }
 
@@ -284,14 +285,17 @@ function sendAppendEntry(r) {
                 // we have not accepted newer messages from this other.
                 r.nextIndex[o] = r.nextIndex[o]-1; 
             }
+            cb();
         });
+    }, function(err){
+        p = function(x) { 
+            return r.nextIndex[x]>= r.commitIndex+1 && 
+                                r.log[r.commitIndex+1].term == r.currentTerm;};
+        while(hasMajority(r, p)){
+            r.commitIndex++;
+        }
+        applyCommittedLogs(r);
     });
-    p = function(x) { 
-        return r.nextIndex[x]>= r.commitIndex+1 && 
-                            r.log[r.commitIndex+1].term == r.currentTerm;};
-    while(hasMajority(r, p)){
-        r.commitIndex++;
-    }
 }
 
 /**
