@@ -152,11 +152,11 @@ function handleAppendRequest(r, appendReq) {
     return {"currentTerm": r.currentTerm, "success": true};
 }
 
-function handleCommand(r, c) {
+function handleCommand(r, c, cb) {
     // should be handle by caller but make sure
     assert.equal(r.curState,  states.leader); 
     r.log.push({term: r.currentTerm, command: c});
-    sendAppendEntry(r);
+    sendAppendEntry(r, cb);
     return true;
 }
 
@@ -267,7 +267,7 @@ function newElectionTimeout(r) {
     1000 + Math.floor(Math.random() * 2000));
 }
     
-function sendAppendEntry(r) {
+function sendAppendEntry(r, finalCB) {
     async.each(r.others, function(o, cb){
         // save off the index for the callbacks. 
         var indexOfLastLog = r.indexOfLastLog();
@@ -295,6 +295,7 @@ function sendAppendEntry(r) {
             r.commitIndex++;
         }
         applyCommittedLogs(r);
+        if (finalCB) {finalCB();}
     });
 }
 

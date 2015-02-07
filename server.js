@@ -34,30 +34,35 @@ http.createServer(function (req, res) {
                 logger.debug("dispatching to handler: " + body);
                 res.writeHead(200, {'Content-Type': 'application/json'});
                 res.write(JSON.stringify(paths[q.path](r ,JSON.parse(body))));
+                res.end();
             }
             else if (q.path == "/command") {
                 console.log("Got Command");
                 if (! r.leader) {
                     res.writeHead(503);
-                    res.write("Service not available");
+                        res.write("Service not available");
+                    res.end();
                 }
                 else if (r.leader == id) {
                     console.log("execute");
-                    raft.handleCommand(r, body);
-                    res.writeHead(200, {'Content-Type': 'application/json'});
-                    res.end(JSON.stringify(state));
+                    raft.handleCommand(r, body, function(){
+                        console.log("setting up response");
+                        res.writeHead(200, {'Content-Type': 'application/json'});
+                        res.end(JSON.stringify(state));
+                    });
                 }
                 else {
-                    var url = 'http://127.0.0.1:'+r.leader+ '/' + req.url;
+                    var url = 'http://127.0.0.1:'+r.leader+ req.url;
                     console.log("Redirect to " + url);
                     res.statusCode = 302;
                     res.setHeader('Location', url);
+                    res.end(body);
                 }
             }
             else {
                 res.writeHead(400, {'Content-Type': 'application/json'});
+                res.end();
             }
-            res.end();
         });
     }
     else {
