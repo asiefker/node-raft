@@ -54,9 +54,9 @@ http.createServer(function (req, res) {
                 else {
                     var url = 'http://127.0.0.1:'+r.leader+ req.url;
                     console.log("Redirect to " + url);
-                    res.statusCode = 302;
                     res.setHeader('Location', url);
-                    res.end(body);
+                    res.writeHead(200, {'Content-Type': 'application/json'});
+                    res.end(JSON.stringify({"leader": url}));
                 }
             }
             else {
